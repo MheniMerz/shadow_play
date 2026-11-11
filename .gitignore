@@ -48,3 +48,10 @@ pids/
 .claude/
 CLAUDE.md
 CLAUDE.local.md
+
+# Trailer render outputs
+trailer/*.mp4
+trailer/*.wav
+trailer/models/
+trailer/venv/
+trailer/frames/

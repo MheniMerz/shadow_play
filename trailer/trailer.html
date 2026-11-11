@@ -1,0 +1,490 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  @font-face { font-family: Fell; src: url(fell.woff2) format('woff2'); }
+  @font-face { font-family: Fell; font-style: italic; src: url(fell-italic.woff2) format('woff2'); }
+  html, body { margin: 0; background: #000; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1280" height="720"></canvas>
+<script>
+// Shadow Play trailer: deterministic motion graphics. render(t) draws frame at time t (seconds).
+const W = 1280, H = 720;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+
+// ---------- timeline (seconds) ----------
+const SCENES = [
+  ['lamp', 0, 8.2], ['hands', 8.2, 15.2], ['three', 15.2, 21.0], ['alive', 21.0, 27.0],
+  ['size', 27.0, 34.0], ['wolf', 34.0, 40.2], ['duck', 40.2, 46.2], ['moon', 46.2, 54.6], ['title', 54.6, 63.0],
+];
+const DURATION = 63.0;
+
+// ---------- palette ----------
+const C = {
+  black: '#0b0a08', ink: '#0d0b09', wall: '#26302a', wall2: '#1f2823', wood: '#1d140e', wood2: '#2a1d14',
+  paper: '#e3d3b4', paperDark: '#c9b591', light: '255,214,150', blood: '#7d211b', brass: '#9a7a43', pale: '#efe4cc',
+};
+
+// ---------- helpers ----------
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, k) => a + (b - a) * k;
+const ease = (k) => (k = clamp(k, 0, 1), k * k * (3 - 2 * k));
+const easeOut = (k) => 1 - Math.pow(1 - clamp(k, 0, 1), 3);
+const easeIn = (k) => Math.pow(clamp(k, 0, 1), 3);
+function hash(n) { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); }
+let BOIL = 0; // frame index of the 12 fps line boil
+function jit(i, amp, k = 0) { return (hash(BOIL * 13.37 + i * 7.77 + k) - 0.5) * 2 * amp; }
+
+/** Fill a closed shape through points with a hand-drawn wobble. */
+function blob(pts, fill, amp = 1.6, seed = 0, close = true) {
+  const p = pts.map(([x, y], i) => [x + jit(i, amp, seed), y + jit(i, amp, seed + 50)]);
+  ctx.beginPath();
+  const n = p.length;
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const m0 = mid(p[n - 1], p[0]);
+  ctx.moveTo(m0[0], m0[1]);
+  for (let i = 0; i < n; i++) { const m = mid(p[i], p[(i + 1) % n]); ctx.quadraticCurveTo(p[i][0], p[i][1], m[0], m[1]); }
+  if (close) ctx.closePath();
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+}
+function polyPts(pts, fill, amp = 1.2, seed = 0) {
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => { const X = x + jit(i, amp, seed), Y = y + jit(i, amp, seed + 9); i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); });
+  ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
+}
+function ell(cx, cy, rx, ry, rot = 0, n = 18) {
+  const out = [];
+  for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; const x = Math.cos(a) * rx, y = Math.sin(a) * ry; out.push([cx + x * Math.cos(rot) - y * Math.sin(rot), cy + x * Math.sin(rot) + y * Math.cos(rot)]); }
+  return out;
+}
+function line(x0, y0, x1, y1, w, col, amp = 1, seed = 0) {
+  ctx.beginPath(); ctx.lineCap = 'round'; ctx.lineWidth = w; ctx.strokeStyle = col;
+  ctx.moveTo(x0 + jit(1, amp, seed), y0 + jit(2, amp, seed));
+  ctx.quadraticCurveTo((x0 + x1) / 2 + jit(3, amp * 2, seed), (y0 + y1) / 2 + jit(4, amp * 2, seed), x1 + jit(5, amp, seed), y1 + jit(6, amp, seed));
+  ctx.stroke();
+}
+function text(str, x, y, size, col, { italic = false, align = 'center', alpha = 1, spacing = 0 } = {}) {
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.fillStyle = col; ctx.textAlign = align; ctx.textBaseline = 'middle';
+  ctx.font = `${italic ? 'italic ' : ''}${size}px Fell, Georgia, serif`;
+  if (spacing) ctx.letterSpacing = spacing + 'px';
+  ctx.fillText(str, x + jit(1, 0.6, size), y + jit(2, 0.6, size)); ctx.restore();
+}
+/** Transform helper: draw fn in a local frame at (x, y) with scale s (and optional flip/rotation). */
+function at(x, y, s, fn, rot = 0, flip = 1) { ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(s * flip, s); fn(); ctx.restore(); }
+
+// ---------- creatures (unit: 1 = 1 px at scale 1, drawn ~100 px tall, facing right, origin at feet/centre) ----------
+// Converted from the in-game silhouettes (metres × 1000).
+function rabbit(col = C.ink, { eye = 1, ears = 0, squash = 0, eyeCol = C.pale } = {}) {
+  ctx.save(); ctx.scale(1 - squash * 0.5, 1 + squash);
+  blob([[-30, 0], [12, 0], [24, -16], [18, -36], [-8, -42], [-32, -30], [-40, -12]].map(([x, y]) => [x, y]), col, 1.2, 1);
+  blob(ell(24, -46, 16, 13, -0.2), col, 1, 2);
+  blob(ell(-40, -20, 8, 8), col, 0.8, 3);
+  blob(ell(4, -3, 16, 4), col, 0.6, 4);
+  ctx.save(); ctx.translate(18, -55); ctx.rotate(-ears * 0.3); blob(ell(-6, -20, 5.5, 22, 0.25), col, 0.8, 5); ctx.restore();
+  ctx.save(); ctx.translate(26, -55); ctx.rotate(-ears * 0.2); blob(ell(-2, -22, 5.5, 22, 0.05), col, 0.8, 6); ctx.restore();
+  if (eye > 0.02) blob(ell(30, -49, 2.8, 3.2 * eye), eyeCol, 0.2, 7);
+  ctx.restore();
+}
+function wolf(col = C.ink, { jaw = 0, eyeCol = C.pale } = {}) {
+  const k = 0.82 * 1000 / 1000;
+  const P = (pts) => pts.map(([x, y]) => [x * k, -y * k]);
+  polyPts(P([[-47, 4], [-58, -20], [-66, -64], [-12, -64], [-19, -52], [-9, -47], [-20, -40], [-11, -34], [-22, -28], [-16, -21], [-30, -22]]), col, 0.9, 11);
+  polyPts(P([[-36, 24], [-31, 60], [-21, 29]]), col, 0.7, 12);
+  polyPts(P([[-46, 0], [-41, 17], [-29, 29], [-13, 34], [2, 29], [12, 21], [36, 15], [58, 10], [66, 8], [71, 3], [70, -2], [64, -4], [40, -5], [16, -6], [-2, -9], [-20, -20], [-40, -28], [-50, -14]]), col, 0.9, 13);
+  polyPts(P([[-26, 27], [-15, 71], [-3, 30]]), col, 0.7, 14);
+  ctx.save(); ctx.translate(-2 * k, 8 * k); ctx.rotate(jaw * 0.5);
+  polyPts(P([[-6, -6], [20, -7], [50, -8], [54, -12], [32, -18], [2, -20], [-14, -15]]).map(([x, y]) => [x + 2 * k, y - 8 * k]), col, 0.7, 15);
+  ctx.restore();
+  polyPts(P([[-1, 16], [4, 19], [9, 16], [4, 14]]), eyeCol, 0.2, 16);
+}
+function duck(col = C.ink, { beak = 0, eyeCol = C.pale } = {}) {
+  blob([[-45, -5], [-35, 12], [20, 14], [34, 0], [20, -16], [-20, -18], [-50, -22]], col, 1, 21);
+  blob(ell(22, -26, 8, 16, 0.3), col, 0.7, 22);
+  blob(ell(28, -44, 12, 11), col, 0.7, 23);
+  polyPts([[36, -48], [58, -43], [36, -40]], col, 0.5, 24);
+  ctx.save(); ctx.translate(36, -40); ctx.rotate(beak * 0.45); polyPts([[0, 0], [18, 1], [0, 4]], col, 0.4, 25); ctx.restore();
+  blob(ell(-8, -8, 18, 7, -0.15), '#2b231e', 0.5, 26);
+  blob(ell(31, -47, 2.4, 2.8), eyeCol, 0.2, 27);
+}
+function crow(col = C.ink, { flap = 0, eyeCol = C.pale } = {}) {
+  blob([[-16, -4], [-4, 6], [12, 4], [16, -6], [6, -12], [-10, -10]], col, 0.6, 31);
+  blob(ell(14, -14, 6, 6), col, 0.4, 32);
+  polyPts([[19, -16], [28, -13], [19, -11]], col, 0.3, 33);
+  polyPts([[-16, -4], [-26, 0], [-24, -8]], col, 0.3, 34);
+  ctx.save(); ctx.translate(2, -6); ctx.rotate(-flap); polyPts([[0, 0], [-20, -16], [-6, -2]], col, 0.4, 35); ctx.restore();
+  blob(ell(16, -16, 1.6, 1.6), eyeCol, 0.1, 36);
+  line(-2, 6, -4, 14, 1.4, col, 0.2, 37); line(4, 6, 4, 14, 1.4, col, 0.2, 38);
+}
+/** A real hand making a rabbit: fist, two fingers up as ears, thumb across. Origin at wrist. */
+function handRabbit(col, { open = 0, cuff = null } = {}) {
+  ctx.lineCap = 'round'; ctx.strokeStyle = col; ctx.fillStyle = col;
+  polyPts([[-62, 260], [-54, 128], [58, 128], [68, 260]], col, 1, 40); // coat sleeve
+  if (cuff) polyPts([[-50, 132], [-46, 110], [50, 110], [54, 132]], cuff, 0.8, 39); // shirt cuff
+  blob([[-36, 118], [-32, 66], [38, 66], [44, 118]], col, 1, 41); // wrist
+  blob([[-50, 40], [-52, 2], [-38, -14], [-20, -18], [0, -20], [22, -16], [44, -6], [58, 14], [56, 48], [30, 72], [-30, 72]], col, 1.3, 42); // fist with knuckles
+  const f = (x0, y0, x1, y1, w, s) => { ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x0 + jit(1, 1, s), y0); ctx.quadraticCurveTo((x0 + x1) / 2 + 4 + jit(2, 2, s), (y0 + y1) / 2, x1 + jit(3, 1.2, s), y1 + jit(4, 1.2, s)); ctx.stroke(); };
+  f(-18, -8, -32 - open * 10, -128, 24, 43); // index: one ear
+  f(14, -8, 22 + open * 10, -124, 24, 44); // middle: the other ear
+  f(54, 26, 6, 4, 21, 45); // thumb across to the ring finger
+}
+
+// ---------- room ----------
+let wallPattern = null;
+function makeWallpaper() {
+  const p = document.createElement('canvas'); p.width = 80; p.height = 120;
+  const g = p.getContext('2d');
+  g.fillStyle = C.wall; g.fillRect(0, 0, 80, 120);
+  g.fillStyle = C.wall2; g.fillRect(0, 0, 6, 120); g.fillRect(40, 0, 2, 120);
+  g.fillStyle = 'rgba(160,170,140,0.07)';
+  // damask-like motif
+  g.beginPath(); g.ellipse(23, 40, 9, 16, 0, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.moveTo(23, 14); g.quadraticCurveTo(35, 30, 23, 22); g.quadraticCurveTo(11, 30, 23, 14); g.fill();
+  g.beginPath(); g.ellipse(63, 100, 6, 10, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(0, 118, 80, 2);
+  wallPattern = ctx.createPattern(p, 'repeat');
+}
+function room({ wainscot = true, frame = false } = {}) {
+  ctx.fillStyle = wallPattern; ctx.fillRect(0, 0, W, H);
+  if (wainscot) {
+    ctx.fillStyle = C.wood; ctx.fillRect(0, H - 150, W, 150);
+    ctx.fillStyle = C.wood2; ctx.fillRect(0, H - 156, W, 10);
+    for (let x = 30; x < W; x += 210) { ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 3; ctx.strokeRect(x + jit(x, 0.8), H - 128, 170, 100); }
+  }
+  if (frame) {
+    // an empty picture frame on the wall, slightly crooked (a quiet unease)
+    at(1040, 170, 1, () => { ctx.fillStyle = '#3b2c1a'; ctx.fillRect(-62, -78, 124, 156); ctx.fillStyle = '#161512'; ctx.fillRect(-50, -66, 100, 132); }, 0.05);
+  }
+}
+/** Darkness everywhere except a warm pool of lamp light centred at (x, y). */
+function lampLight(x, y, r, k, warm = 0.25) {
+  const g = ctx.createRadialGradient(x, y, r * 0.15, x, y, r);
+  g.addColorStop(0, `rgba(8,7,5,${0.15 + 0.85 * (1 - k)})`);
+  g.addColorStop(0.55, `rgba(8,7,5,${0.45 + 0.55 * (1 - k)})`);
+  g.addColorStop(1, 'rgba(8,7,5,0.97)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  if (k > 0) {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const g2 = ctx.createRadialGradient(x, y, 0, x, y, r * 0.9);
+    g2.addColorStop(0, `rgba(${C.light},${warm * k})`); g2.addColorStop(1, `rgba(${C.light},0)`);
+    ctx.fillStyle = g2; ctx.fillRect(0, 0, W, H); ctx.restore();
+  }
+}
+function deskLamp(x, y, on, s = 1) {
+  at(x, y, s, () => {
+    blob(ell(0, 0, 70, 14), '#15100b', 1, 51);
+    line(-10, -6, -40, -150, 9, '#3a2c20', 1, 52);
+    line(-40, -150, 60, -205, 8, '#3a2c20', 1, 53);
+    blob(ell(-40, -150, 9, 9), '#2a2017', 0.5, 54);
+    ctx.save(); ctx.translate(60, -205); ctx.rotate(0.55);
+    polyPts([[-28, -10], [36, -42], [44, 26], [-28, 10]], '#4d5c47', 1, 55); line(36, -42, 44, 26, 3, '#8a7a55', 0.5, 57);
+    if (on > 0) { blob(ell(40, -8, 9, 30), `rgba(255,236,190,${0.9 * on})`, 0.6, 56); }
+    ctx.restore();
+  });
+}
+
+// ---------- film finish ----------
+const grains = [];
+function makeGrain() {
+  for (let k = 0; k < 6; k++) {
+    const g = document.createElement('canvas'); g.width = 320; g.height = 180; const gg = g.getContext('2d');
+    const img = gg.createImageData(320, 180);
+    for (let i = 0; i < img.data.length; i += 4) { const v = 128 + (hash(i * 0.37 + k * 1000) - 0.5) * 255; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+    gg.putImageData(img, 0, 0); grains.push(g);
+  }
+}
+function filmFinish(t) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = 0.22; ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(grains[BOIL % grains.length], 0, 0, W, H);
+  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  const v = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.95);
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.72)');
+  ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+  // flicker + occasional scratch and dust
+  const fl = 0.04 * hash(BOIL * 3.1);
+  ctx.fillStyle = `rgba(0,0,0,${fl})`; ctx.fillRect(0, 0, W, H);
+  if (hash(BOIL * 5.7) > 0.86) { const x = hash(BOIL * 9.1) * W; ctx.strokeStyle = 'rgba(230,220,200,0.12)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + jit(9, 6), H); ctx.stroke(); }
+  for (let i = 0; i < 5; i++) { if (hash(BOIL * 2.3 + i) > 0.7) { ctx.fillStyle = 'rgba(230,220,200,0.18)'; ctx.beginPath(); ctx.arc(hash(BOIL + i * 3.3) * W, hash(BOIL * 1.7 + i) * H, 0.8 + hash(i + BOIL) * 1.6, 0, 7); ctx.fill(); } }
+  // muted, slightly green-brown grade
+  ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = 'rgb(236,228,206)'; ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+}
+/** Iris transition: a circle opening (k 0→1) or closing (k 1→0) around (x, y). */
+function iris(k, x = W / 2, y = H / 2) {
+  if (k >= 1) return;
+  const r = easeIn(k) * Math.hypot(W, H);
+  ctx.save(); ctx.fillStyle = '#000'; ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.arc(x, y, Math.max(0.1, r), 0, Math.PI * 2, true); ctx.fill('evenodd'); ctx.restore();
+}
+function fadeBlack(a) { if (a > 0) { ctx.fillStyle = `rgba(0,0,0,${clamp(a, 0, 1)})`; ctx.fillRect(0, 0, W, H); } }
+
+// ---------- scenes (lt = local time) ----------
+const S = {};
+
+S.lamp = (lt) => {
+  room({ frame: true });
+  const on = lt < 1.2 ? 0 : lt < 1.5 ? (hash(Math.floor(lt * 30)) > 0.5 ? 1 : 0.2) : 1;
+  const k = on * ease((lt - 1.2) / 1.2 + 0.4);
+  deskLamp(250, 650, on, 1.5);
+  // light cone on the wall
+  if (on) {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(560, 300, 10, 560, 300, 420); g.addColorStop(0, `rgba(${C.light},${0.16 * k})`); g.addColorStop(1, `rgba(${C.light},0)`);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(330, 420); ctx.lineTo(1000, 40); ctx.lineTo(1100, 620); ctx.closePath(); ctx.fill(); ctx.restore();
+  }
+  lampLight(560, 320, 560, k);
+  // slow push-in
+};
+
+S.hands = (lt) => {
+  room({ frame: true });
+  deskLamp(250, 640, 1);
+  const rise = easeOut((lt - 0.6) / 2.4);
+  const hx = 520, hy = lerp(820, 470, rise);
+  // shadow on the wall: projected, bigger, softer
+  ctx.save(); ctx.filter = 'blur(3px)'; ctx.globalAlpha = 0.88 * rise;
+  at(lerp(840, 800, rise), lerp(560, 300, rise), 1.75, () => handRabbit('#0b0a08'), -0.08);
+  ctx.restore();
+  lampLight(620, 320, 600, 1);
+  // the real hand, dark against the light, in the foreground
+  at(hx, hy, 1.0, () => handRabbit('#120e0b', { cuff: '#bdb39c' }), -0.1);
+  // ears twitch on the wall at the end of the line
+};
+
+S.three = (lt) => {
+  ctx.fillStyle = wallPattern; ctx.fillRect(0, 0, W, H);
+  lampLight(640, 330, 700, 1, 0.12);
+  const beats = [0.5, 1.2, 2.15];
+  const xs = [330, 640, 950];
+  const draw = [
+    () => at(8, 52, 1.35, () => rabbit(C.ink, { eye: (lt % 2.7) < 0.12 ? 0.1 : 1, ears: Math.sin(lt * 5) * 0.2 })),
+    () => at(0, 18, 1.45, () => wolf(C.ink, { jaw: 0 })),
+    () => at(-6, 36, 1.6, () => duck(C.ink, { beak: Math.max(0, Math.sin(lt * 4)) * 0.6 })),
+  ];
+  for (let i = 0; i < 3; i++) {
+    const k = (lt - beats[i]) / 0.5;
+    if (k <= 0) continue;
+    const drop = easeOut(k);
+    const swing = Math.sin((lt - beats[i]) * 3.2) * 0.12 * Math.exp(-(lt - beats[i]) * 0.9);
+    // hanging oval portrait frames on a nail
+    at(xs[i], lerp(-200, 330, drop), 1, () => {
+      line(0, -270, -60, -135, 2, '#0f0c08', 0.4, 60 + i); line(0, -270, 60, -135, 2, '#0f0c08', 0.4, 70 + i);
+      blob(ell(0, 0, 128, 160), C.brass, 1.2, 80 + i); blob(ell(0, 0, 116, 148), '#3a2b16', 1, 90 + i);
+      blob(ell(0, 0, 104, 136), C.paper, 1, 100 + i);
+      ctx.save(); ctx.beginPath(); ctx.ellipse(0, 0, 104, 136, 0, 0, 7); ctx.clip();
+      const pg = ctx.createRadialGradient(0, -20, 10, 0, 0, 150); pg.addColorStop(0, 'rgba(255,240,200,0.0)'); pg.addColorStop(1, 'rgba(90,60,30,0.45)'); ctx.fillStyle = pg; ctx.fillRect(-120, -150, 240, 300);
+      draw[i]();
+      ctx.restore();
+      blob(ell(0, -270, 5, 5), '#6a5a40', 0.3, 110 + i);
+    }, swing);
+  }
+};
+
+S.alive = (lt) => {
+  ctx.fillStyle = C.paper; ctx.fillRect(0, 0, W, H);
+  const pg = ctx.createRadialGradient(560, 330, 40, 640, 360, 760); pg.addColorStop(0, 'rgba(255,236,190,0.15)'); pg.addColorStop(1, 'rgba(70,45,25,0.7)'); ctx.fillStyle = pg; ctx.fillRect(0, 0, W, H);
+  // grey real-hand shadow stays behind
+  const sep = easeOut((lt - 2.3) / 1.2);
+  ctx.save(); ctx.filter = 'blur(4px)'; ctx.globalAlpha = 0.55 - 0.25 * sep; at(560, 470, 1.7, () => handRabbit('#2a221b'), -0.08); ctx.restore();
+  // the living shadow: eye opens, then it hops away
+  const eye = lt < 1.0 ? 0 : lt < 1.25 ? (lt - 1.0) / 0.25 : (lt % 3.1 < 0.1 ? 0.1 : 1);
+  const hopT = lt - 3.4;
+  let x = 600, y = 520, sq = 0;
+  if (hopT > 0) { const n = Math.floor(hopT / 0.7), f = (hopT % 0.7) / 0.7; x += (n + f) * 190; y -= Math.sin(f * Math.PI) * 110; sq = f < 0.15 ? -0.12 : Math.sin(f * Math.PI) * 0.12; }
+  at(x, y, 2.4 * lerp(0.92, 1, sep), () => rabbit(C.ink, { eye, ears: Math.sin(lt * 6) * 0.15 + (hopT > 0 ? 0.4 : 0), squash: sq, eyeCol: lt > 1 && lt < 2.2 ? '#d8c27a' : C.pale }));
+  ctx.fillStyle = 'rgba(40,30,20,0.25)'; ctx.fillRect(0, 600, W, 120);
+};
+
+S.size = (lt) => {
+  // an engraving-style diagram: lamp, hand, wall, with light rays
+  ctx.fillStyle = '#d8c6a3'; ctx.fillRect(0, 0, W, H);
+  const pg = ctx.createRadialGradient(640, 360, 100, 640, 360, 800); pg.addColorStop(0, 'rgba(0,0,0,0)'); pg.addColorStop(1, 'rgba(60,40,20,0.55)'); ctx.fillStyle = pg; ctx.fillRect(0, 0, W, H);
+  // grow (1.7–2.5 s) then shrink (4.0–4.9 s)
+  const grow = ease((lt - 2.0) / 1.4), shrink = ease((lt - 4.3) / 1.4);
+  const handX = lerp(lerp(640, 400, grow), 860, shrink);
+  const lampX = 180, wallX = 1120, cy = 360;
+  // wall
+  ctx.fillStyle = '#3a2f24'; ctx.fillRect(wallX, 60, 26, 600);
+  // lamp
+  at(lampX, cy, 0.9, () => { blob(ell(0, 0, 22, 22), '#f6e3b0', 0.6, 120); for (let a = 0; a < 12; a++) line(Math.cos(a) * 30, Math.sin(a) * 30, Math.cos(a) * 44, Math.sin(a) * 44, 2, '#5a4630', 0.6, 121 + a); });
+  // rays through the hand's top and bottom to the wall
+  const hh = 70, ratio = (wallX - lampX) / (handX - lampX);
+  const sTop = cy - hh * ratio, sBot = cy + hh * 0.4 * ratio;
+  ctx.setLineDash([7, 7]); line(lampX, cy, wallX, sTop, 1.5, '#4b3a2a', 0.5, 140); line(lampX, cy, wallX, sBot, 1.5, '#4b3a2a', 0.5, 141); ctx.setLineDash([]);
+  // shadow rabbit on the wall (seen face-on, drawn just left of the wall line)
+  const sc = clamp(ratio * 0.55, 0.6, 3.6);
+  at(wallX - 10, cy + 60 * sc * 0.9, sc, () => rabbit(C.ink, { ears: Math.sin(lt * 4) * 0.15 }), 0, -1);
+  // the hand, small and side-on
+  at(handX, cy + 10, 0.55, () => handRabbit('#1c1611', { cuff: '#efe6d2' }), -0.05);
+  text(grow > 0.5 && shrink < 0.5 ? 'closer to the light' : shrink > 0.5 ? 'closer to the wall' : '', 640, 650, 34, '#3b2c1e', { italic: true, alpha: 0.8 });
+};
+
+S.wolf = (lt) => {
+  ctx.fillStyle = '#1b2025'; ctx.fillRect(0, 0, W, H);
+  // moonlit paper backdrop
+  const g = ctx.createRadialGradient(900, 160, 20, 900, 160, 700); g.addColorStop(0, 'rgba(230,220,190,0.55)'); g.addColorStop(1, 'rgba(20,24,28,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  blob(ell(940, 150, 46, 46), '#e8dcb8', 1, 150);
+  // fence
+  for (let x = 40; x < W; x += 70) polyPts([[x - 9, 720], [x - 9, 470], [x, 455], [x + 9, 470], [x + 9, 720]], '#0e0c0a', 0.8, 160 + x);
+  polyPts([[0, 500], [W, 500], [W, 514], [0, 514]], '#0e0c0a', 0.8, 170);
+  polyPts([[0, 580], [W, 580], [W, 594], [0, 594]], '#0e0c0a', 0.8, 171);
+  // ground
+  ctx.fillStyle = '#0c0a08'; ctx.fillRect(0, 650, W, 70);
+  // wolf: jaw opens at ~2.6 s (howl)
+  const howl = lt - 2.4;
+  const jaw = howl > 0 ? clamp(howl / 0.3, 0, 1) * (howl < 2.2 ? 1 : clamp(1 - (howl - 2.2) / 0.4, 0, 1)) : 0;
+  at(260, 380, 3.0, () => wolf('#0a0908', { jaw, eyeCol: '#d9cfa8' }), -0.05 - jaw * 0.12);
+  // howl rings
+  for (let i = 0; i < 4; i++) {
+    const k = (howl - i * 0.25) / 1.3; if (k <= 0 || k >= 1) continue;
+    ctx.strokeStyle = `rgba(220,205,170,${0.5 * (1 - k)})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(470, 365, 30 + k * 420, -0.9, 0.9); ctx.stroke();
+  }
+  // crows on the fence, scattering after the howl (the middle one has a red eye)
+  const cx = [640, 820, 1010, 1160];
+  cx.forEach((x, i) => {
+    const f = howl - 0.4 - i * 0.12;
+    const fly = f > 0 ? f : 0;
+    const X = x + fly * 260 + jit(i, 0.5), Y = 455 - fly * 300 - Math.sin(fly * 9) * 6;
+    at(X, Y, 2.0, () => crow('#0b0908', { flap: fly > 0 ? Math.sin(fly * 26) * 0.9 : Math.sin(lt * 2 + i) * 0.08, eyeCol: i === 1 ? C.blood : '#cbbf9e' }));
+  });
+};
+
+S.duck = (lt) => {
+  ctx.fillStyle = '#cdb994'; ctx.fillRect(0, 0, W, H);
+  const pg = ctx.createRadialGradient(640, 300, 80, 640, 360, 820); pg.addColorStop(0, 'rgba(255,240,205,0.2)'); pg.addColorStop(1, 'rgba(60,40,22,0.65)'); ctx.fillStyle = pg; ctx.fillRect(0, 0, W, H);
+  // banks and pond
+  polyPts([[0, 720], [0, 470], [190, 476], [250, 520], [250, 720]], '#3d2f25', 1.2, 180);
+  polyPts([[1060, 720], [1060, 520], [1110, 470], [1280, 466], [1280, 720]], '#3d2f25', 1.2, 181);
+  ctx.fillStyle = '#2d3a46'; ctx.fillRect(230, 520, 850, 200);
+  for (let r = 0; r < 4; r++) for (let x = 260 + r * 30; x < 1040; x += 120) blob(ell(x + Math.sin(lt * 1.3 + r) * 10, 552 + r * 36, 34, 2.2), 'rgba(200,210,215,0.35)', 0.6, 190 + r * 10 + x);
+  // reeds and a dead tree on the far bank
+  for (let i = 0; i < 6; i++) line(70 + i * 22, 476, 70 + i * 22 + Math.sin(lt + i) * 6, 380 - (i % 3) * 30, 4, '#2c221a', 0.8, 200 + i);
+  line(1170, 470, 1180, 250, 12, '#241b14', 1, 210); line(1178, 300, 1240, 230, 6, '#241b14', 1, 211); line(1176, 340, 1120, 290, 5, '#241b14', 1, 212);
+  // duck paddling: each beak close pushes it forward
+  const paddles = Math.max(0, (lt - 0.8) / 0.55);
+  const n = Math.floor(paddles), f = paddles - n;
+  const x = 300 + Math.min(10, n + easeOut(f * 1.6)) * 68;
+  const beak = n < 10 ? Math.max(0, Math.sin(f * Math.PI)) : 0;
+  const y = 530 + Math.sin(lt * 2.6) * 3;
+  at(x, y, 2.4, () => { duck(C.ink, { beak }); at(-8, -26, 0.42, () => rabbit(C.ink, { ears: Math.sin(lt * 5) * 0.2 })); });
+  if (f < 0.3 && n < 10) for (let i = 0; i < 3; i++) { ctx.strokeStyle = `rgba(210,220,225,${0.4 * (1 - f / 0.3)})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(x - 40 - i * 18, y + 30, 30 + i * 14 + f * 60, 5 + i * 2, 0, 0, 7); ctx.stroke(); }
+};
+
+S.moon = (lt) => {
+  if (lt < 3.6) {
+    // eight small scenes: paper cards flipping into a theatre
+    ctx.fillStyle = '#16120e'; ctx.fillRect(0, 0, W, H);
+    lampLight(640, 360, 760, 1, 0.1);
+    // theatre proscenium appears on "one paper theatre"
+    const th = ease((lt - 1.5) / 0.8);
+    if (th > 0) {
+      ctx.globalAlpha = th;
+      polyPts([[150, 70], [1130, 70], [1130, 650], [150, 650]], '#4a1d18', 1, 220);
+      polyPts([[200, 120], [1080, 120], [1080, 610], [200, 610]], '#14110d', 1, 221);
+      for (let i = 0; i < 8; i++) { blob([[150 + i * 125, 70], [275 + i * 125, 70], [212 + i * 125, 112]], '#5c2620', 0.8, 230 + i); }
+      ctx.globalAlpha = 1;
+    }
+    const names = ['First light', 'The gap', 'Tall grass', 'Crows', 'Pond', 'Small door', 'Relay', 'Moonrise'];
+    for (let i = 0; i < 8; i++) {
+      const k = (lt - 0.12 * i) / 0.4; if (k <= 0) continue;
+      const flip = Math.cos((1 - easeOut(k)) * Math.PI / 2);
+      const x = 300 + (i % 4) * 228, y = 255 + Math.floor(i / 4) * 230;
+      at(x, y, 1, () => {
+        ctx.scale(flip, 1);
+        polyPts([[-86, -98], [86, -98], [86, 98], [-86, 98]], C.paper, 1.4, 240 + i);
+        text(String(i + 1), 0, -30, 64, '#2a1f16');
+        text(names[i], 0, 40, 24, '#3a2b1e', { italic: true });
+      }, jit(i, 0.02, 3));
+    }
+  } else {
+    // night sky with a sleeping moon; one eye opens at the end
+    const lt2 = lt - 3.6;
+    ctx.fillStyle = '#10141a'; ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 70; i++) { const tw = 0.4 + 0.6 * hash(i + BOIL * 0.5); blob(ell(hash(i * 3.3) * W, hash(i * 7.1) * 470, 1.4 * tw, 1.4 * tw, 0, 6), 'rgba(240,226,190,0.8)', 0.2, 300 + i); }
+    const rise = easeOut(lt2 / 4.5);
+    const mx = 640, my = lerp(470, 300, rise);
+    const glow = ctx.createRadialGradient(mx, my, 60, mx, my, 330); glow.addColorStop(0, 'rgba(240,226,180,0.35)'); glow.addColorStop(1, 'rgba(240,226,180,0)'); ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+    blob(ell(mx, my, 150, 150, 0, 28), '#efe2bd', 1.4, 320);
+    blob(ell(mx - 50, my - 40, 28, 18), 'rgba(170,150,110,0.35)', 1, 321); blob(ell(mx + 60, my + 50, 22, 14), 'rgba(170,150,110,0.3)', 1, 322);
+    // eyes: closed lines, the right one opens
+    const open = ease((lt2 - 2.6) / 0.5);
+    line(mx - 70, my - 10, mx - 30, my - 8, 4, '#4b3d2a', 0.6, 330);
+    if (open < 0.05) line(mx + 30, my - 8, mx + 70, my - 10, 4, '#4b3d2a', 0.6, 331);
+    else { blob(ell(mx + 50, my - 9, 22, 14 * open), '#f7f0dc', 0.6, 332); blob(ell(mx + 52 + Math.sin(lt * 0.8) * 3, my - 9, 8, 8 * open), '#15110c', 0.3, 333); }
+    line(mx - 20, my + 55, mx + 20, my + 57, 3.5, '#4b3d2a', 0.6, 334);
+    // hills and the wolf silhouette under the moon
+    polyPts([[0, 720], [0, 600], [240, 570], [520, 610], [800, 575], [1100, 600], [1280, 580], [1280, 720]], '#07080a', 1.4, 340);
+    at(230, 560, 2.6, () => wolf('#07080a', { jaw: 0.7, eyeCol: '#07080a' }), -0.25);
+  }
+};
+
+S.title = (lt) => {
+  ctx.fillStyle = '#0c0a08'; ctx.fillRect(0, 0, W, H);
+  lampLight(640, 330, 680, 1, 0.16);
+  // paper screen with the hand shadow
+  const show = ease(lt / 1.2);
+  ctx.globalAlpha = show;
+  polyPts([[300, 90], [980, 90], [980, 470], [300, 470]], '#d9c7a2', 1.6, 400);
+  const pg = ctx.createRadialGradient(640, 280, 40, 640, 280, 420); pg.addColorStop(0, 'rgba(255,240,200,0.2)'); pg.addColorStop(1, 'rgba(70,45,25,0.55)'); ctx.fillStyle = pg; ctx.fillRect(300, 90, 680, 380);
+  ctx.save(); ctx.beginPath(); ctx.rect(300, 90, 680, 380); ctx.clip();
+  ctx.filter = 'blur(2.5px)'; ctx.globalAlpha = 0.85 * show; at(640, 470, 1.25, () => handRabbit('#0d0b09'), -0.06);
+  ctx.restore();
+  ctx.globalAlpha = 1;
+  // title, letter by letter (VO says "Shadow Play" at ~1.0 s)
+  const word = 'Shadow Play';
+  const reveal = clamp((lt - 0.8) / 0.9, 0, 1) * word.length;
+  ctx.save(); ctx.font = '96px Fell, Georgia, serif'; const full = ctx.measureText(word).width; ctx.restore();
+  let x = 640 - full / 2;
+  for (let i = 0; i < word.length; i++) {
+    ctx.save(); ctx.font = '96px Fell, Georgia, serif'; const w = ctx.measureText(word[i]).width; ctx.restore();
+    const a = clamp(reveal - i, 0, 1);
+    if (a > 0) text(word[i], x + w / 2, 570 + (1 - a) * 12, 96, C.pale, { alpha: a });
+    x += w;
+  }
+  // tagline at ~2.8 s
+  text('Your hands are the puppets.', 640, 640, 36, '#cbb894', { italic: true, alpha: ease((lt - 2.8) / 0.8) * (1 - ease((lt - 5.4) / 0.6)) });
+  // end card
+  const end = ease((lt - 5.6) / 0.8);
+  if (end > 0) {
+    text('Make hand shadows on your real wall', 640, 640, 32, '#cbb894', { italic: true, alpha: end });
+    text('MIXED REALITY  ·  META QUEST 3 / 3S', 640, 690, 20, '#8f7f62', { alpha: end, spacing: 3 });
+  }
+};
+
+// ---------- frame ----------
+function render(t) {
+  BOIL = Math.floor(t * 12);
+  ctx.save();
+  ctx.clearRect(0, 0, W, H);
+  let sc = SCENES.find(([, a, b]) => t >= a && t < b) || SCENES[SCENES.length - 1];
+  const [id, a, b] = sc; const lt = t - a;
+  // gentle camera drift / push-in
+  const push = 1 + 0.03 * (lt / (b - a));
+  ctx.translate(W / 2, H / 2); ctx.scale(push, push); ctx.translate(-W / 2 + Math.sin(t * 0.3) * 4, -H / 2 + Math.cos(t * 0.23) * 3);
+  S[id](lt);
+  ctx.restore();
+  filmFinish(t);
+  // transitions
+  const toEnd = b - t;
+  const irisScenes = { hands: [840, 360], wolf: [300, 370], moon: [640, 360] };
+  if (id === 'lamp') fadeBlack(1 - ease(t / 0.8));
+  else if (irisScenes[id] && lt < 0.7) iris(lt / 0.7, ...irisScenes[id]);
+  else if (lt < 0.45) fadeBlack(1 - lt / 0.45);
+  if (id === 'title') fadeBlack(ease((t - (DURATION - 1.2)) / 1.2));
+  else if (toEnd < 0.45) fadeBlack(1 - toEnd / 0.45);
+}
+
+window.ready = (async () => {
+  await document.fonts.load('96px Fell'); await document.fonts.load('italic 36px Fell');
+  makeWallpaper(); makeGrain();
+  return true;
+})();
+window.frame = (t, q = 0.92) => { render(t); return cv.toDataURL('image/jpeg', q); };
+window.DURATION = DURATION;
+</script>
+</body>
+</html>
