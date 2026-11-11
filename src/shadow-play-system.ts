@@ -330,7 +330,7 @@ export class ShadowPlaySystem extends createSystem({
       const b = this.buttons.create(`summon-${id}`, ui, SHAPES[id].name, { w: 0.07, h: 0.03, px: 256, font: '600 60px Georgia, serif' }, () => {
         this.summonShape = this.summonShape === id ? null : id;
       });
-      b.mesh.position.set(-0.085 + i * 0.085, -SCREEN_H / 2 - 0.035, 0.06);
+      b.mesh.position.set(-0.085 + i * 0.085, -SCREEN_H / 2 - 0.085, 0.07);
       b.mesh.rotation.x = -0.6;
     });
 
@@ -688,6 +688,13 @@ export class ShadowPlaySystem extends createSystem({
       }),
       debug: (on: boolean) => (this.debugVisible = on),
       enterXR: () => this.world.launchXR(),
+      buttonScreenPos: (id: string) => {
+        const b = this.buttons.byId.get(id);
+        if (!b) return null;
+        const v = b.mesh.getWorldPosition(new Vector3()).project(this.camera);
+        const r = this.renderer.domElement.getBoundingClientRect();
+        return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
+      },
       wallMode: (on: boolean) => {
         this.save.settings.wallMode = on;
         if (this.wasImmersive) this.placeInFrontOfHead();
