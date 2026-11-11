@@ -614,6 +614,14 @@ export class ShadowPlaySystem extends createSystem({
         calibration: this.save.calibration,
       }),
       debug: (on: boolean) => (this.debugVisible = on),
+      enterXR: () => this.world.launchXR(),
+      xrInfo: () => ({
+        immersive: this.wasImmersive,
+        hands: (['left', 'right'] as const).map((h) => ({ h, tracked: this.hands.hands[h].tracked, source: this.hands.hands[h].source, wrist: Array.from(this.hands.hands[h].joints.slice(0, 3)).map((n) => +n.toFixed(3)) })),
+        shadowCasters: this.shadows.describe(this.world),
+        stage: this.stage.root.position.toArray().map((n) => +n.toFixed(3)),
+        head: this.player.head.getWorldPosition(new Vector3()).toArray().map((n) => +n.toFixed(3)),
+      }),
       resetSave: () => {
         localStorage.clear();
         location.reload();

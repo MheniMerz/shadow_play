@@ -122,6 +122,15 @@ export class HandShadows {
     }
   }
 
+  /** Which caster each hand is using right now (for diagnostics). */
+  describe(world: World): Record<Handedness, string> {
+    const out = {} as Record<Handedness, string>;
+    for (const side of ['left', 'right'] as const) {
+      out[side] = this.proxies[side].group.visible ? 'proxy' : this.findSkinned(world, side) ? 'skinned-mesh' : 'none';
+    }
+    return out;
+  }
+
   /** Locate the IWSDK hand visual's skinned mesh and turn its shadow on. */
   private findSkinned(world: World, side: Handedness): SkinnedMesh | null {
     const adapter = world.input.xr.visualAdapters.hand[side];
