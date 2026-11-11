@@ -80,7 +80,7 @@ export const POSES = {
   }),
   duck: (open = 0): HandPoseSpec => ({
     fingers: { index: f(18, 22, 10, 1), middle: f(18, 22, 10, 0), ring: f(20, 24, 10, -1), pinky: f(22, 26, 12, -2) },
-    thumb: { mode: 'target', finger: 'middle', offset: [0.004, -0.012, -0.022 - 0.045 * open] },
+    thumb: { mode: 'target', finger: 'middle', offset: [0.004, -0.012, -0.022 - 0.06 * open] },
   }),
   openHand: (): HandPoseSpec => ({
     fingers: { index: straight(12), middle: straight(0), ring: straight(-12), pinky: straight(-24) },
