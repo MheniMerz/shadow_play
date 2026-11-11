@@ -34,7 +34,7 @@ import { SCREEN_H, SCREEN_W } from './game/config.js';
 import { DebugOverlay, saveClip } from './game/debug.js';
 import { GhostHand } from './game/ghost-hand.js';
 import { type DebugPose, HandInput } from './game/hands.js';
-import { LEVELS } from './game/levels.js';
+import { LEVELS, THEATRE } from './game/levels.js';
 import { type LevelResult, Play, type PlayInput } from './game/play.js';
 import { loadSave, type SaveData, storeSave } from './game/progress.js';
 import { HandShadows } from './game/shadow-casters.js';
@@ -303,6 +303,12 @@ export class ShadowPlaySystem extends createSystem({
       this.mapCards.push(b);
     });
 
+    // Free-play theatre, unlocked after the finale
+    const theatre = this.buttons.create('theatre', this.mapEntity, 'Shadow theatre: free play', { w: 0.18, h: 0.026, px: 512, font: 'italic 600 40px Georgia, serif' }, () => {
+      if (this.save.stars[LEVELS.length]) this.startTheatre();
+    });
+    theatre.mesh.position.set(0, -0.143, 0);
+
     // Settings: a column of toggles on the screen
     this.settingsGroup = new Group();
     this.settingsGroup.name = 'settings';
@@ -365,6 +371,7 @@ export class ShadowPlaySystem extends createSystem({
 
   private refreshMap(): void {
     if (!this.mapCards.length) return;
+    this.buttons.setVisible('theatre', (this.save.stars[LEVELS.length] ?? 0) > 0);
     LEVELS.forEach((lv, i) => drawLevelCard(this.mapCards[i].text, lv.id, lv.name, this.save.stars[lv.id] ?? 0, !this.isUnlocked(lv.id), this.save.settings.highContrast));
   }
 
@@ -388,6 +395,14 @@ export class ShadowPlaySystem extends createSystem({
     this.summonShape = null;
     for (const h of ['left', 'right'] as const) this.per[h].stab.reset();
     this.game.start(lv);
+  }
+
+  private startTheatre(): void {
+    this.currentLevel = THEATRE.id;
+    this.mode = 'play';
+    this.summonShape = null;
+    for (const h of ['left', 'right'] as const) this.per[h].stab.reset();
+    this.game.start(THEATRE);
   }
 
   private onLevelComplete(r: LevelResult): void {
@@ -675,7 +690,7 @@ export class ShadowPlaySystem extends createSystem({
         Object.assign(this.hands.debugTarget, { x, y, z });
         this.hands.debugOpen = open;
       },
-      startLevel: (id: number) => this.startLevel(id),
+      startLevel: (id: number) => (id === THEATRE.id ? this.startTheatre() : this.startLevel(id)),
       showMap: () => this.showMap(false),
       state: () => ({
         mode: this.mode,

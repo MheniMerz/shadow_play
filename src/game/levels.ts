@@ -23,7 +23,9 @@ export type Objective =
   | { kind: 'form'; creature: 'rabbit' | 'wolf' | 'duck'; hold: number; at: [number, number] }
   | { kind: 'reach'; creature: 'rabbit'; start: [number, number]; goal: { x0: number; x1: number; y: number } }
   | { kind: 'scare'; creature: 'wolf'; targets: { x: number; y: number; kind: 'crow' | 'moon'; minScale?: number }[] }
-  | { kind: 'paddle'; creature: 'duck'; startX: number; goalX: number; rider?: boolean };
+  | { kind: 'paddle'; creature: 'duck'; startX: number; goalX: number; rider?: boolean }
+  /** Free play: any creature, no goal. Crows come back after they are scared off. */
+  | { kind: 'free'; creature?: undefined; crows: { x: number; y: number }[] };
 
 export interface StageDef {
   caption: string;
@@ -172,3 +174,17 @@ export const LEVELS: LevelDef[] = [
     extra: [0.16, 0.0],
   },
 ];
+
+/** Free-play "shadow theatre", unlocked after level 8. Never completes. */
+export const THEATRE: LevelDef = {
+  id: 99,
+  name: 'Shadow theatre',
+  scene: {
+    platforms: [{ x0: -0.23, x1: 0.02, y: G }, { x0: 0.16, x1: 0.23, y: -0.085 }],
+    ponds: [{ x0: 0.02, x1: 0.16, y: -0.1 }],
+    props: [{ kind: 'stars', x: 0, y: 0.08 }, { kind: 'tree', x: -0.18, y: G }, { kind: 'grass', x: -0.06, y: G }],
+  },
+  stages: [{ caption: 'Shadow theatre: make any shadow you like', objective: { kind: 'free', crows: [{ x: -0.16, y: 0.02 }, { x: -0.13, y: 0.05 }] } }],
+  par: 0,
+  extra: [0.1, 0.06],
+};

@@ -103,6 +103,9 @@ export class Play {
   private levelTime = 0;
   private transient: { text: string; t: number } | null = null;
   private wasActive: ShapeId | null = null;
+  /** Free play: the creature currently in use. */
+  private freeKind: ShapeId = 'rabbit';
+  private crowRespawn = 0;
 
   constructor(private readonly cb: PlayCallbacks) {
     this.root.name = 'play';
@@ -118,9 +121,15 @@ export class Play {
     return this.level?.stages[this.stageIndex] ?? null;
   }
 
-  /** The creature the current stage needs. */
+  /** The creature the current stage needs (null in free play: any shape). */
   get needed(): ShapeId | null {
-    return this.objective?.creature ?? null;
+    const obj = this.objective;
+    if (!obj || obj.kind === 'free') return null;
+    return obj.creature;
+  }
+
+  get isFreePlay(): boolean {
+    return this.objective?.kind === 'free';
   }
 
   get creatureInfo() {
@@ -180,6 +189,7 @@ export class Play {
     this.stageDone = false;
     this.stuckTime = 0;
     const obj = st.objective;
+    if (obj.kind === 'free') this.spawnCrows(obj.crows.map((c) => ({ ...c, kind: 'crow' as const })));
     if (obj.kind === 'scare') {
       for (const t of obj.targets) {
         const g = t.kind === 'moon' ? buildMoon() : buildCrow();
@@ -198,9 +208,21 @@ export class Play {
       }
     }
     if (this.hint) this.root.remove(this.hint.rig.root);
-    this.hint = new HintGhost(obj.creature);
-    this.root.add(this.hint.rig.root);
+    this.hint = null;
+    if (obj.kind !== 'free') {
+      this.hint = new HintGhost(obj.creature);
+      this.root.add(this.hint.rig.root);
+    }
     this.caption = st.caption;
+  }
+
+  private spawnCrows(list: { x: number; y: number; kind: 'crow' }[]): void {
+    for (const t of list) {
+      const g = buildCrow();
+      g.position.set(t.x, t.y, 0.0005);
+      this.dynamic.add(g);
+      this.crows.push({ g, x: t.x, y: t.y, scared: false, t: 0, isMoon: false });
+    }
   }
 
   private say(text: string, seconds = 2): void {
@@ -275,7 +297,14 @@ export class Play {
       if (this.transient.t <= 0) this.transient = null;
     }
     const obj = this.objective as Objective;
-    const need = obj.creature;
+    if (obj.kind === 'free' && inp.active && inp.active !== this.freeKind) {
+      // Switching creature in free play: the old one leaves, the new one wakes below.
+      if (this.creature && this.creature.state !== 'hopping') this.creature.state = 'leaving';
+      this.wasActive = null;
+      this.freeKind = inp.active;
+      if (inp.active !== 'rabbit') this.rabbitHome = null;
+    }
+    const need: ShapeId = obj.kind === 'free' ? this.freeKind : obj.creature;
     const active = inp.active === need ? need : null;
     const justEntered = active && this.wasActive !== active;
     const justReleased = !active && this.wasActive === need;
@@ -300,6 +329,7 @@ export class Play {
 
     if (!this.creature || this.creature.state !== 'alive') this.stuckTime += dt;
     else this.stuckTime = 0;
+    if (obj.kind === 'free') this.stuckTime = 0;
     this.wantGhostHand = this.stuckTime > 10 || (this.level.teaches === need && this.stuckTime > 2 && this.levelTime < 40);
     if (this.stuckTime > 14 && this.stageDef?.stuckHint && !this.transient) this.say(this.stageDef.stuckHint, 4);
   }
@@ -322,6 +352,7 @@ export class Play {
       this.spawn('wolf', clamp(inp.shadow.x, -0.18, 0.18), clamp(inp.shadow.y, -0.1, 0.12), scale);
     } else {
       const pond = this.scene.ponds?.[0];
+      if (obj.kind === 'free' && pond) this.duckX = clamp(inp.tracked ? inp.shadow.x : pond.x0 + 0.02, pond.x0 + 0.02, pond.x1 - 0.02);
       this.spawn('duck', this.duckX, (pond?.y ?? -0.1) + 0.004, scale);
     }
   }
@@ -329,7 +360,7 @@ export class Play {
   private release(inp: PlayInput): void {
     const c = this.creature as Creature;
     const obj = this.objective as Objective;
-    if (c.kind === 'rabbit' && obj.kind === 'reach') {
+    if (c.kind === 'rabbit' && (obj.kind === 'reach' || obj.kind === 'free')) {
       c.state = 'hopping';
       const s = c.scale;
       c.vx = (HOP_DIST * s) / HOP_TIME;
@@ -378,6 +409,8 @@ export class Play {
         if (c.rig.jaw) c.rig.jaw.rotation.z = -0.6 * inp.beakAmount;
         if (inp.beakEdge === 'close') {
           this.duckX += PADDLE_STEP;
+          const pond = this.scene.ponds?.[0];
+          if ((this.objective as Objective).kind === 'free' && pond) this.duckX = Math.min(this.duckX, pond.x1 - 0.02);
           this.cb.sfx('paddle');
         }
         if (inp.beakEdge === 'open') this.cb.sfx('quack');
@@ -527,6 +560,17 @@ export class Play {
         break;
       case 'scare':
         if (this.crows.length && this.crows.every((cr) => cr.scared)) this.completeStage();
+        break;
+      case 'free':
+        if (this.crows.length && this.crows.every((cr) => cr.scared)) {
+          this.crowRespawn += dt;
+          if (this.crowRespawn > 3) {
+            this.crowRespawn = 0;
+            for (const cr of this.crows) this.dynamic.remove(cr.g);
+            this.crows = [];
+            this.spawnCrows(obj.crows.map((c2) => ({ ...c2, kind: 'crow' as const })));
+          }
+        }
         break;
       case 'paddle':
         if (this.rider) this.rider.root.position.x = (c?.x ?? this.duckX) - 0.005;

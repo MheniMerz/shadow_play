@@ -132,6 +132,9 @@ XR hand joints ──► features ──► shape rules ──► stabilizer ─
 Stars: one for finishing, one for beating the par time, one for the hidden
 firefly.
 
+After level 8, **Shadow theatre** (free play) unlocks on the map: form any
+creature anywhere. The crows come back after you scare them off.
+
 ## Accessibility
 
 Settings (top-right tab) include:
