@@ -1,45 +1,151 @@
-# IWSDK App
+# Shadow Play
 
-This project uses `iwsdk.config.json` for declarative scene, asset, component,
-XR, and emulator configuration. Application systems remain explicit in
-`src/index.ts`.
+Make hand shadows on your real wall and watch them come alive. A mixed-reality
+puzzle game for Meta Quest 3 / 3S, built with the
+[Immersive Web SDK (IWSDK)](https://iwsdk.dev) for the Meta VR Start Developer
+Competition (Gaming track, New Experience division).
 
-```sh
+A paper screen stands on your desk with a lamp beside you. Your tracked hand
+casts a **real shadow** on the paper. Form a rabbit, wolf or duck and hold
+it: the shadow turns into a living creature that follows your hand. Bring
+your hand toward the lamp to make it bigger, or toward the paper to make it
+smaller. Let go and it acts: the rabbit hops, the wolf howls when you drop your
+pinky, and the duck paddles when you open and close its beak.
+
+## Run it
+
+```bash
 npm install
-npm run dev
+npm run dev          # IWSDK-managed dev server on https://localhost:8081
+npm test             # hand-recognition tests (synthetic poses + recorded clips)
+npm run typecheck
+npm run build        # production build in dist/
 ```
 
-Use the Runtime and Editor controls in the managed browser to switch between
-the running experience and its authored scene.
+### On the headset (do this every day)
 
-## Starter content
+1. Run `npm run dev`. Then run `npx @iwsdk/cli dev status` and copy a URL from
+   `runtimeUrls.network` (for example `https://192.168.1.20:8081/`).
+2. On the Quest (same Wi-Fi), open that URL in the browser and accept the
+   certificate warning. You can also forward the port over USB from
+   `chrome://inspect`.
+3. Press **Enter XR**. Put the controllers down: the game uses hands only.
+   The stage appears about 55 cm in front of you at desk height. To move it,
+   pinch the round tab under the screen and drag.
+4. Add `?debug` to the URL for the dev overlay, which shows live features,
+   shape scores and the weakest rule.
 
-The robot and welcome panel are small examples of authored scene content plus
-runtime systems. The robot turns toward the player's head and plays a sound
-when pressed. To remove the robot, delete its scene node, its `RobotSystem`
-registration from `src/index.ts` or `src/index.js`, and its `Robot` registration
-from `src/components.ts` or `src/components.js`; you can then delete the unused
-robot component and system files. To remove the welcome panel, delete its scene
-node and its `PanelSystem` registration from the application entry point.
+### On the desktop (no headset)
 
-The robot stands on the second of three numbered stations. The first holds dark
-pieces you can grab and move, and the third holds a ring you can spin in place.
-The studio props (the plinths and the dark pieces, plus the floor and stage in VR
-and Desktop 3D) are built in code in `src/scene-assets/studio.scene-asset.ts` or
-`.js`. The VR and Desktop 3D background furniture is built the same way in
-`src/scene-assets/decor.scene-asset.ts` or `.js`, so the starter downloads no
-extra models. To remove any of them, delete their scene nodes and their entries
-in `src/assets.ts` or `src/assets.js`, then delete the files you no longer use.
-The station labels are `public/ui/label-*.uikitml`.
+The page runs in IWSDK's emulator (IWER) and also as a flat page. A synthetic
+"debug hand" lets you play the whole game:
 
-The rest of the look is built-in components in the scene, which you can edit in
-the editor without code. The soft light on every object is the scene root's
-`IBLGradient` (select the Level Root to edit it), and the soft shadows under
-each object are `ContactShadow` nodes. In VR and Desktop 3D, the sky is the
-scene root's `DomeGradient` (its colors, tilt and dither are also on the Level
-Root), and the floor fades into it through the `DomeFade` on the floor node. AR
-projects have no sky or floor, so passthrough stays visible, and a
-`ShadowCatcher` node grounds the stations.
+| Key | Action |
+| --- | --- |
+| `1` / `2` / `3` | Rabbit / wolf / duck hand |
+| `4` / `5` / `0` / `9` | Open hand / fist / relaxed hand / hide the hand |
+| Mouse | Move the hand's shadow on the paper |
+| Wheel, `W` / `S` | Hand toward the lamp (bigger) / toward the paper (smaller) |
+| `Space` (hold) | Open the wolf's mouth / the duck's beak |
+| `M` | Level map |
+| `` ` `` | Debug overlay (dev builds or `?debug`) |
+| `R` | Record a 3 s hand clip (with the overlay on) |
 
-- Minimal scene walkthrough: https://iwsdk.dev/guides/01b-minimal-scene.html
-- XR-enabled projects — IWER emulator controls: https://iwsdk.dev/guides/02-testing-experience.html#iwer-controls
+`window.shadowPlay` exposes `pose()`, `startLevel()`, `state()` and more for
+scripted tests.
+
+## Tuning hand recognition (the make-or-break part)
+
+Recognition is a pure TypeScript module (`src/hand/`), so it runs in Node tests
+and on the headset:
+
+1. `features.ts` turns the 25 WebXR hand joints into about 15 numbers: finger
+   curls, fingertip distances, finger spread, and thumb direction.
+2. `shapes.ts` defines each creature as soft rules. Every rule maps one feature
+   to a 0–1 score between two thresholds, and the shape's score is the lowest
+   rule score. **These thresholds are starting guesses: tune them with real
+   hands.**
+3. `stabilizer.ts` smooths over 5 frames. It enters a shape after its score
+   stays above 0.8 for 250 ms and leaves after the score stays below 0.6 for
+   300 ms. The wolf's howl and the duck's paddle are open/close edges, so each
+   fires once per gesture.
+4. `calibration.ts` handles first use: the game learns from the player's own
+   "close enough" pose. It only makes rules easier, and only by a bounded
+   amount.
+
+**Record real clips:** open `?debug` on the headset, use **Next label** to
+pick what you are about to do (`rabbit`, `wolf-howl`, `near-miss-rabbit`,
+…), then press **Record 3 s** and hold the pose. On the dev server the clip is
+saved straight to `recordings/`; elsewhere it downloads. `npm test` replays
+every clip. A correct clip must be recognised in time, and a wrong clip must
+never trigger a creature. Aim for about 10 clips per shape: correct poses,
+near misses, and other shapes. Small, large and less flexible hands help most.
+
+Useful tools: `npx vite-node scripts/pose-report.ts` (features and scores for
+every synthetic pose) and `npx vite-node scripts/noise-report.ts` (robustness
+to joint jitter).
+
+## How it works
+
+```
+XR hand joints ──► features ──► shape rules ──► stabilizer ──► creature alive / act
+       │                                                         ▲
+       └──► hand mesh casts a real shadow from the lamp ─────────┘ (position + size on the paper)
+```
+
+- **Real shadows.** The IWSDK hand visual's skinned mesh casts a shadow from
+  one spot light (the lamp) onto the paper, with a 1024 px shadow map. The
+  desktop debug hand casts through an invisible capsule "proxy hand".
+  `?shadow=proxy` forces the proxy on the headset.
+- **Position and size.** The hand's centre is projected from the lamp onto the
+  paper. The size ratio (lamp-to-screen ÷ lamp-to-hand) sets the creature's
+  scale.
+- **Levels** are data (`src/game/levels.ts`): platforms, ponds, walls, props
+  and a list of stage objectives (`form`, `reach`, `scare`, `paddle`).
+- **No assets.** Paper textures, creatures and scenery are drawn in code.
+  Sounds are synthesised with WebAudio.
+- **Progress** (stars, calibration, settings) is saved in `localStorage`.
+
+| Path | What |
+| --- | --- |
+| `src/shadow-play-system.ts` | Main system: hands → recognition → level → UI |
+| `src/hand/` | Recognition core (pure, tested) |
+| `src/game/stage.ts` | Paper screen, lamp, grab handle, shadow projection |
+| `src/game/play.ts` | Level runner: creatures, hop physics, howls, paddling, goals |
+| `src/game/levels.ts` | The 8 levels |
+| `src/game/creatures.ts`, `scenery.ts` | Paper cut-out silhouettes |
+| `src/game/hands.ts`, `shadow-casters.ts` | Joint input and shadow casters |
+| `src/game/debug.ts` | Dev overlay and clip recorder |
+| `tests/` | Vitest suites |
+
+## Levels
+
+1. **First light**: form the rabbit (tutorial; the level map unrolls afterwards)
+2. **The gap**: walk to the edge and hop across
+3. **Tall grass**: grow the rabbit to reach a ledge
+4. **Crows**: the wolf; howl near each crow
+5. **Pond**: the duck; paddle across
+6. **Small door**: shrink to fit through, then grow to reach the carrot
+7. **Relay**: the duck ferries the rabbit, then the wolf clears the crows
+8. **Moonrise**: all three, ending with a big howl that wakes the moon
+
+Stars: one for finishing, one for beating the par time, one for the hidden
+firefly.
+
+## Accessibility
+
+Settings (top-right tab) include:
+
+- **Creature cards:** look at a card and pinch to summon a creature without
+  forming the shape. Pinch again to howl or paddle.
+- Large text and high contrast.
+- Sound on/off.
+- Recalibrate.
+- Move the stage.
+
+## Deploy
+
+Push to `main` with the included workflow (`.github/workflows/deploy.yml`) and
+set **Settings → Pages → Source: GitHub Actions**. The build uses relative
+paths (`base: './'`), so it works from a sub-path. Check that the public URL
+opens in the Quest browser without logging in.
