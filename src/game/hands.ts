@@ -27,8 +27,18 @@ function makeState(handedness: Handedness): HandState {
 
 export type DebugPose = 'rabbit' | 'wolf' | 'duck' | 'relaxed' | 'openHand' | 'fist' | null;
 
-/** Orientation of the debug hand in stage space so its shadow reads well. */
+const basisCache = new Map<DebugPose, Quaternion>();
+
+/** Orientation of the debug hand in stage space so its shadow reads well (cached per pose). */
 export function debugBasis(pose: DebugPose): Quaternion {
+  const hit = basisCache.get(pose);
+  if (hit) return hit;
+  const q = computeBasis(pose);
+  basisCache.set(pose, q);
+  return q;
+}
+
+function computeBasis(pose: DebugPose): Quaternion {
   const m = new Matrix4();
   // Columns: where the hand's local x (radial, mirrored for right), y (fingers), z (dorsal) point in stage space.
   if (pose === 'wolf' || pose === 'openHand' || pose === 'relaxed' || pose === 'fist') {

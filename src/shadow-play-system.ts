@@ -49,7 +49,10 @@ interface PerHand {
   mouth: OpenCloseTracker;
   beak: OpenCloseTracker;
   events: ShapeEvent[];
+  /** Ring buffer of the last 30 smoothed feature frames (preallocated). */
   recent: Features[];
+  recentCount: number;
+  recentHead: number;
 }
 
 const params = new URLSearchParams(location.search);
@@ -138,7 +141,9 @@ export class ShadowPlaySystem extends createSystem({
       mouth: new OpenCloseTracker(GESTURES.wolfMouth.open, GESTURES.wolfMouth.closed),
       beak: new OpenCloseTracker(GESTURES.duckBeak.open, GESTURES.duckBeak.closed),
       events: [],
-      recent: [],
+      recent: Array.from({ length: 30 }, () => emptyFeatures()),
+      recentCount: 0,
+      recentHead: 0,
     });
     this.per = { left: mk(), right: mk() };
 
@@ -412,7 +417,7 @@ export class ShadowPlaySystem extends createSystem({
     const f = hand.stab.smoothed;
     if (hand.stab.active === need) {
       // Comfortable already: remember that, using the recent frames.
-      const good = hand.recent.filter((r) => scoreShape(SHAPES[need], r).score > 0.8);
+      const good = hand.recent.slice(0, hand.recentCount).filter((r) => scoreShape(SHAPES[need], r).score > 0.8);
       this.save.calibration[need] = calibrateShape(SHAPES[need], good.length ? good : [f]);
       storeSave(this.save);
       this.rebuildShapes();
@@ -462,8 +467,9 @@ export class ShadowPlaySystem extends createSystem({
       ph.stab.allowed = need ? this.allowSets[need] : this.allowAll;
       ph.stab.update(st.tracked ? ph.features : null, now, ph.events);
       if (ph.stab.smoothed && st.tracked) {
-        ph.recent.push({ ...ph.stab.smoothed });
-        if (ph.recent.length > 30) ph.recent.shift();
+        Object.assign(ph.recent[ph.recentHead], ph.stab.smoothed);
+        ph.recentHead = (ph.recentHead + 1) % ph.recent.length;
+        ph.recentCount = Math.min(ph.recentCount + 1, ph.recent.length);
       }
       if (!st.tracked) continue;
       const score = (need && ph.stab.active === need ? 10 : 0) + (need ? ph.stab.progress(need, now) : 0) + (side === 'right' ? 0.01 : 0);
