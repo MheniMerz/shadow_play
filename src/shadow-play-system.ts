@@ -182,6 +182,11 @@ export class ShadowPlaySystem extends createSystem({
     this.cleanupFuncs.push(
       this.queries.pressed.subscribe('qualify', (e) => {
         this.sound.resume();
+        // A duck's closed beak can read as a pinch: don't let a shape in progress
+        // press the Map/Settings tabs and pull the player out of the level.
+        const id = this.buttons.buttons.get(e.index)?.id ?? '';
+        const shaping = this.per.left.stab.active || this.per.right.stab.active || this.game.creatureAlive;
+        if (this.mode === 'play' && shaping && id.startsWith('tab-')) return;
         this.buttons.press(e);
       }),
       this.queries.hovered.subscribe('qualify', (e) => this.buttons.setHovered(e, true)),
