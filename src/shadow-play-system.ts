@@ -22,6 +22,7 @@ import {
   Vector2,
   Vector3,
   VisibilityState,
+  XRPlane,
 } from '@iwsdk/core';
 import { calibratedShapes, calibrateShape, relaxShape } from './hand/calibration.js';
 import { computeFeatures, emptyFeatures, type Features, handCentroid } from './hand/features.js';
@@ -53,10 +54,13 @@ interface PerHand {
 
 const params = new URLSearchParams(location.search);
 const DEBUG_ALLOWED = params.has('debug') || import.meta.env.DEV;
+/** Farthest wall (m) that wall mode will use; `?wallmax=` overrides for testing. */
+const WALL_MAX = Number(params.get('wallmax')) || 2.5;
 
 export class ShadowPlaySystem extends createSystem({
   pressed: { required: [RayInteractable, Pressed] },
   hovered: { required: [RayInteractable, Hovered] },
+  planes: { required: [XRPlane] },
 }) {
   private stage!: Stage;
   private stageEntity!: Entity;
@@ -91,6 +95,7 @@ export class ShadowPlaySystem extends createSystem({
   private wasImmersive = false;
   private recordCountdown = 0;
   private debugVisible = false;
+  private notice: { text: string; t: number } | null = null;
 
   // scratch
   private readonly shadow2d = new Vector2();
@@ -179,11 +184,14 @@ export class ShadowPlaySystem extends createSystem({
       this.world.visibilityState.subscribe((v) => {
         const immersive = v !== VisibilityState.NonImmersive;
         if (immersive && !this.wasImmersive) {
-          this.placePending = 0.4;
+          this.placePending = this.save.settings.wallMode ? 1.2 : 0.4;
           this.sound.resume();
           this.sound.setHum(true);
         }
-        if (!immersive && this.wasImmersive) this.placeForDesktop();
+        if (!immersive && this.wasImmersive) {
+          this.stage.setScale(1, 0.55);
+          this.placeForDesktop();
+        }
         this.wasImmersive = immersive;
         this.scene.background = immersive ? null : new Color(0x241c17);
       }),
@@ -205,7 +213,66 @@ export class ShadowPlaySystem extends createSystem({
   private placeInFrontOfHead(): void {
     this.player.head.getWorldPosition(this.headPos);
     this.player.head.getWorldQuaternion(this.headQuat);
+    if (this.save.settings.wallMode && this.placeOnWall()) return;
     this.stage.placeInFront(this.headPos, this.headQuat);
+  }
+
+  /**
+   * Wall mode: find the detected vertical plane the player is looking at and
+   * hang the (scaled-up) paper screen on it. Returns false if none is found.
+   */
+  private placeOnWall(): boolean {
+    const head = this.headPos;
+    const fwd = new Vector3(0, 0, -1).applyQuaternion(this.headQuat);
+    fwd.y = 0;
+    fwd.normalize();
+    let bestT = Infinity;
+    const bestPos = new Vector3();
+    const bestN = new Vector3();
+    const n = new Vector3();
+    const p0 = new Vector3();
+    const local = new Vector3();
+    for (const e of this.queries.planes.entities) {
+      const plane = e.getValue(XRPlane, '_plane') as globalThis.XRPlane | undefined;
+      const obj = e.object3D;
+      if (!plane || !obj || plane.orientation !== 'vertical') continue;
+      obj.updateMatrixWorld(true);
+      obj.getWorldPosition(p0);
+      n.set(0, 1, 0).applyQuaternion(obj.getWorldQuaternion(this.q)).normalize();
+      const denom = fwd.dot(n);
+      if (Math.abs(denom) < 0.3) continue; // too oblique
+      const t = p0.clone().sub(head).dot(n) / denom;
+      if (t < 0.4 || t > WALL_MAX || t >= bestT) continue;
+      const hit = head.clone().addScaledVector(fwd, t);
+      // inside the plane polygon's bounds (plane space x/z)?
+      local.copy(hit);
+      obj.worldToLocal(local);
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      for (const pt of plane.polygon) {
+        minX = Math.min(minX, pt.x); maxX = Math.max(maxX, pt.x);
+        minZ = Math.min(minZ, pt.z); maxZ = Math.max(maxZ, pt.z);
+      }
+      if (local.x < minX - 0.2 || local.x > maxX + 0.2 || local.z < minZ - 0.2 || local.z > maxZ + 0.2) continue;
+      bestT = t;
+      bestPos.copy(hit);
+      bestN.copy(n);
+    }
+    if (!Number.isFinite(bestT)) {
+      this.notice = { text: 'No wall found: face a wall within 2.5 m and try again', t: 3 };
+      return false;
+    }
+    if (bestN.dot(head.clone().sub(bestPos)) < 0) bestN.negate();
+    bestN.y = 0;
+    bestN.normalize();
+    // Scale so the lamp (0.68 m × k from the screen) always sits behind the player's head.
+    const k = Math.max(1.5, bestT / 0.55);
+    this.stage.setScale(k, bestT);
+    // Screen centre at about eye height minus a little, 1 cm off the wall.
+    const pos = bestPos.clone().addScaledVector(bestN, 0.01);
+    pos.y = Math.max(head.y - 0.06 * k, 0.3 + 0.2 * k);
+    const yaw = Math.atan2(bestN.x, bestN.z);
+    this.stage.setPose(pos, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw));
+    return true;
   }
 
   // -------------------------------------------------------------------- UI
@@ -242,13 +309,14 @@ export class ShadowPlaySystem extends createSystem({
       ['large', () => `Large text: ${s.largeText ? 'on' : 'off'}`, () => { s.largeText = !s.largeText; this.applyTextSettings(); }],
       ['contrast', () => `High contrast: ${s.highContrast ? 'on' : 'off'}`, () => { s.highContrast = !s.highContrast; this.applyTextSettings(); }],
       ['sound', () => `Sound: ${s.muted ? 'off' : 'on'}`, () => { s.muted = !s.muted; this.sound.muted = s.muted; this.sound.setHum(!s.muted && this.wasImmersive); }],
+      ['wall', () => `Stage on a real wall: ${s.wallMode ? 'on' : 'off'}`, () => { s.wallMode = !s.wallMode; if (this.wasImmersive) this.placeInFrontOfHead(); }],
       ['recenter', () => 'Move stage in front of me', () => { if (this.wasImmersive) this.placeInFrontOfHead(); else this.placeForDesktop(); }],
       ['recalibrate', () => 'Recalibrate my hand', () => { this.save.calibration = {}; this.rebuildShapes(); }],
       ['back', () => 'Back', () => this.showMap(false)],
     ];
     rows.forEach(([id, label, act], i) => {
       const col = i < 4 ? 0 : 1;
-      const row = i < 4 ? i : i - 4;
+      const row = i % 4;
       const b = this.buttons.create(`set-${id}`, this.settingsEntity, label(), { w: 0.19, h: 0.05, px: 512 }, () => {
         act();
         b.text.set(label());
@@ -419,7 +487,7 @@ export class ShadowPlaySystem extends createSystem({
       if (ratio > 0) {
         inp.tracked = true;
         inp.shadow.copy(this.shadow2d);
-        inp.ratio = ratio;
+        inp.ratio = ratio * (1.4 / this.stage.referenceRatio);
       }
     }
     for (const id of SHAPE_IDS) inp.progress[id] = ph ? ph.stab.progress(id, now) : 0;
@@ -464,6 +532,11 @@ export class ShadowPlaySystem extends createSystem({
       caption = 'Choose a scene: look at it and pinch';
     } else if (this.mode === 'settings') {
       caption = 'Settings';
+    }
+    if (this.notice) {
+      this.notice.t -= dt;
+      caption = this.notice.text;
+      if (this.notice.t <= 0) this.notice = null;
     } else if (this.mode === 'result') {
       caption = this.resultText;
       this.resultTimer -= dt;
@@ -615,6 +688,11 @@ export class ShadowPlaySystem extends createSystem({
       }),
       debug: (on: boolean) => (this.debugVisible = on),
       enterXR: () => this.world.launchXR(),
+      wallMode: (on: boolean) => {
+        this.save.settings.wallMode = on;
+        if (this.wasImmersive) this.placeInFrontOfHead();
+        return { k: this.stage.k, ref: +this.stage.referenceRatio.toFixed(2), planes: this.queries.planes.entities.size };
+      },
       xrInfo: () => ({
         immersive: this.wasImmersive,
         hands: (['left', 'right'] as const).map((h) => ({ h, tracked: this.hands.hands[h].tracked, source: this.hands.hands[h].source, wrist: Array.from(this.hands.hands[h].joints.slice(0, 3)).map((n) => +n.toFixed(3)) })),

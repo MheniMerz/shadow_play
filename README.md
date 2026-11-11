@@ -138,6 +138,9 @@ Settings (top-right tab) include:
 
 - **Creature cards:** look at a card and pinch to summon a creature without
   forming the shape. Pinch again to howl or paddle.
+- **Stage on a real wall:** uses plane detection to hang a scaled-up paper
+  screen on the wall you face (up to 2.5 m away). The lamp moves behind you
+  so your hands still cast the shadows.
 - Large text and high contrast.
 - Sound on/off.
 - Recalibrate.

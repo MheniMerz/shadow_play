@@ -32,7 +32,7 @@ export class GhostHand {
   constructor() {
     this.group.name = 'ghost-hand';
     // Stage-local spot between lamp and paper where the hand should go.
-    this.group.position.set(0.07, 0.0, 0.22);
+    this.group.position.set(0.07, 0.02, 0.22);
     const cyl = new CylinderGeometry(1, 1, 1, 8, 1, true);
     const sph = new SphereGeometry(1, 8, 6);
     for (let i = 0; i < BONES.length; i++) {
@@ -83,7 +83,7 @@ export class GhostHand {
     const bob = Math.sin(this.t * 1.5) * 0.004;
     for (let i = 0; i < 25; i++) {
       this.joints[i].position.set(j[i * 3] - cx, j[i * 3 + 1] - cy + bob, j[i * 3 + 2] - cz);
-      this.joints[i].scale.setScalar(i === 0 ? 0.012 : 0.0075);
+      this.joints[i].scale.setScalar(i === 0 ? 0.011 : 0.0062);
     }
     for (let n = 0; n < BONES.length; n++) {
       const [i0, i1] = BONES[n];
@@ -94,7 +94,7 @@ export class GhostHand {
       const d = this.b.sub(this.a);
       const len = d.length();
       if (len > 1e-5) m.quaternion.setFromUnitVectors(UP, d.multiplyScalar(1 / len));
-      m.scale.set(0.0068, len, 0.0068);
+      m.scale.set(0.0058, len, 0.0058);
     }
     this.mat.opacity = 0.32 * this.visibleAmount * (0.85 + 0.15 * Math.sin(this.t * 4));
   }

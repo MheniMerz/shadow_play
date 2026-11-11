@@ -46,6 +46,10 @@ export class Stage {
   private readonly tmp = new Vector3();
   private readonly tmp2 = new Vector3();
   private readonly q = new Quaternion();
+  /** Stage scale: 1 on the desk, larger when the screen is on a far wall. */
+  k = 1;
+  /** Size ratio for a hand at a comfortable distance; creature scale 1 maps to this. */
+  referenceRatio = 1.4;
 
   constructor() {
     this.root.name = 'shadow-stage';
@@ -141,6 +145,7 @@ export class Stage {
 
   /** Put the stage in front of a head pose (seated, desk height). */
   placeInFront(headPos: Vector3, headQuat: Quaternion): void {
+    this.setScale(1, STAGE_DISTANCE);
     const fwd = this.tmp.set(0, 0, -1).applyQuaternion(headQuat);
     fwd.y = 0;
     if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, -1);
@@ -152,12 +157,31 @@ export class Stage {
     this.setPose(pos, this.q);
   }
 
+  /**
+   * Scale the whole theatre (wall mode). The lamp keeps its place relative to
+   * the screen, so it ends up just behind the player; its light range and
+   * shadow camera scale with it.
+   */
+  setScale(k: number, headToScreen: number): void {
+    this.k = k;
+    this.root.scale.setScalar(k);
+    this.lamp.distance = 2.5 * k;
+    this.lamp.shadow.camera.near = 0.05 * k;
+    this.lamp.shadow.camera.far = 1.3 * k;
+    this.lamp.shadow.camera.updateProjectionMatrix();
+    this.lampVisual.visible = k < 1.2;
+    // A hand held ~35 cm in front of the eyes should give creature scale 1.
+    const lampToScreen = LAMP_POS[2] * k;
+    const handToScreen = Math.max(0.1, headToScreen - 0.35);
+    this.referenceRatio = k === 1 ? 1.4 : lampToScreen / Math.max(0.05, lampToScreen - handToScreen);
+  }
+
   /** Set the stage pose directly (handle follows). */
   setPose(pos: Vector3, quat: Quaternion): void {
     this.root.position.copy(pos);
     this.root.quaternion.copy(quat);
     this.root.updateMatrixWorld(true);
-    this.handle.position.copy(HANDLE_OFFSET).applyQuaternion(quat).add(pos);
+    this.handle.position.copy(HANDLE_OFFSET).multiplyScalar(this.k).applyQuaternion(quat).add(pos);
     this.handle.quaternion.copy(quat);
     this.handle.updateMatrixWorld(true);
   }
@@ -165,7 +189,7 @@ export class Stage {
   /** Make the stage follow the (possibly grabbed) handle. */
   follow(): void {
     this.root.quaternion.copy(this.handle.quaternion);
-    this.root.position.copy(HANDLE_OFFSET).applyQuaternion(this.handle.quaternion).negate().add(this.handle.position);
+    this.root.position.copy(HANDLE_OFFSET).multiplyScalar(this.k).applyQuaternion(this.handle.quaternion).negate().add(this.handle.position);
     this.root.updateMatrixWorld(true);
   }
 
@@ -195,8 +219,8 @@ export class Stage {
     return this.root.localToWorld(out.set(x, y, 0.001));
   }
 
-  setLampWarmth(k: number): void {
-    this.lamp.intensity = 4.5 + 2.5 * k;
+  setLampWarmth(w: number): void {
+    this.lamp.intensity = (4.5 + 2.5 * w) * this.k ** 1.2;
   }
 
   /** Dim the real hand shadow while a creature is alive (0..1). */
