@@ -51,15 +51,39 @@ export function buildWolf(color: number = INK): CreatureRig {
   const root = new Group();
   const body = new Group();
   root.add(body);
-  // A hand-shadow wolf: long snout, upright ear, hinged lower jaw.
-  const skull = part(blob([[-0.05, -0.012], [-0.03, 0.022], [0.0, 0.03], [0.03, 0.022], [0.062, 0.012], [0.07, 0.002], [0.06, -0.006], [0.0, -0.008], [-0.04, -0.02]]), mat, 'skull');
-  const ear = part(poly([[-0.018, 0.022], [-0.006, 0.062], [0.008, 0.026]]), mat, 'ear');
-  const neck = part(blob([[-0.055, -0.04], [-0.05, 0.0], [-0.03, 0.01], [-0.02, -0.03], [-0.03, -0.05]]), mat, 'neck');
-  const jaw = pivot(-0.01, -0.008, part(blob([[-0.012, -0.004], [0.02, -0.006], [0.05, -0.008], [0.056, -0.014], [0.03, -0.022], [-0.01, -0.02]]), mat, 'jaw'));
-  const earPivot = pivot(-0.006, 0.025, ear);
-  const e = eye(0.012, 0.014, 0.0032);
-  body.add(skull, earPivot, neck, jaw, e);
-  return { root, mats: [mat, e.material as MeshBasicMaterial], eyes: [e], ears: [earPivot], jaw, body, height: 0.08, mouth: new Vector2(0.066, -0.006) };
+  const k = 0.82; // drawn large, scaled to match the other creatures
+  const P = (pts: [number, number][]): [number, number][] => pts.map(([x, y]) => [x * k, y * k]);
+  // Head in profile, like the classic hand-shadow wolf: sloped brow, long snout, nose bump.
+  const head = part(
+    poly(P([
+      [-0.046, 0.0], [-0.041, 0.017], [-0.029, 0.029], [-0.013, 0.034], [0.002, 0.029], [0.012, 0.021],
+      [0.036, 0.015], [0.058, 0.01], [0.066, 0.008], [0.071, 0.003], [0.07, -0.002], [0.064, -0.004],
+      [0.04, -0.005], [0.016, -0.006], [-0.002, -0.009], [-0.02, -0.02], [-0.04, -0.028], [-0.05, -0.014],
+    ])),
+    mat,
+    'head',
+  );
+  // Neck with a ruff of fur.
+  const ruff = part(
+    poly(P([
+      [-0.047, 0.004], [-0.058, -0.02], [-0.066, -0.064], [-0.012, -0.064], [-0.019, -0.052], [-0.009, -0.047],
+      [-0.02, -0.04], [-0.011, -0.034], [-0.022, -0.028], [-0.016, -0.021], [-0.03, -0.022],
+    ])),
+    mat,
+    'ruff',
+  );
+  const earBack = part(poly(P([[-0.036, 0.024], [-0.031, 0.06], [-0.021, 0.029]])), mat, 'ear-back');
+  const earFront = pivot(-0.014 * k, 0.03 * k, part(poly(P([[-0.026, 0.027], [-0.015, 0.071], [-0.003, 0.03]])), mat, 'ear'));
+  // Hinged lower jaw; rotates open when the player drops their pinky.
+  const jaw = pivot(
+    -0.002 * k,
+    -0.008 * k,
+    part(poly(P([[-0.006, -0.006], [0.02, -0.007], [0.05, -0.008], [0.054, -0.012], [0.032, -0.018], [0.002, -0.02], [-0.014, -0.015]])), mat, 'jaw'),
+  );
+  const e = part(poly(P([[-0.001, 0.016], [0.004, 0.019], [0.009, 0.016], [0.004, 0.014]])), inkMaterial(PAPER), 'eye');
+  e.position.z = 0.0004;
+  body.add(ruff, earBack, head, earFront, jaw, e);
+  return { root, mats: [mat, e.material as MeshBasicMaterial], eyes: [e], ears: [earFront], jaw, body, height: 0.1, mouth: new Vector2(0.066 * k, -0.006 * k) };
 }
 
 export function buildDuck(color: number = INK): CreatureRig {
