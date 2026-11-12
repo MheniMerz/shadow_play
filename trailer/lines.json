@@ -1,12 +1,12 @@
 [
-  ["lamp", "In every house, there is a lamp. And behind every lamp... a wall."],
-  ["hands", "Long ago, we learned to give our shadows a shape."],
+  ["open", "Every shadow is just waiting... to come alive."],
+  ["lamp", "All you need is a lamp, a wall, and your own two hands."],
+  ["hands", "Make a rabbit, the way you did when you were small."],
   ["three", "A rabbit. A wolf. A duck."],
-  ["alive", "But some shadows... remember how to move."],
-  ["size", "Bring your hand toward the light, and it grows. Pull it away... and it shrinks."],
-  ["wolf", "Let the wolf howl, and the crows will leave the fence."],
-  ["duck", "Open and close the beak, and the duck will carry you across."],
-  ["moon", "Eight small scenes. One paper theatre. And a moon, waiting to be woken."],
+  ["size", "Bring your hand toward the light, and it grows. Pull it away, and it shrinks."],
+  ["wolf", "Let the wolf howl, and the crows fly off the fence."],
+  ["duck", "Open and close the beak, and the duck paddles you across."],
+  ["moon", "Eight little scenes. One paper theatre. And a sleepy moon to wake."],
   ["title", "Shadow Play."],
   ["tag", "Your hands are the puppets."]
 ]

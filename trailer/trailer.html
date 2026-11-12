@@ -19,15 +19,15 @@ const ctx = cv.getContext('2d');
 
 // ---------- timeline (seconds) ----------
 const SCENES = [
-  ['lamp', 0, 8.2], ['hands', 8.2, 15.2], ['three', 15.2, 21.0], ['alive', 21.0, 27.0],
-  ['size', 27.0, 34.0], ['wolf', 34.0, 40.2], ['duck', 40.2, 46.2], ['moon', 46.2, 54.6], ['title', 54.6, 63.0],
+  ['open', 0, 6.0], ['lamp', 6.0, 12.4], ['hands', 12.4, 18.8], ['three', 18.8, 24.4],
+  ['size', 24.4, 31.4], ['wolf', 31.4, 37.6], ['duck', 37.6, 43.6], ['moon', 43.6, 52.0], ['title', 52.0, 60.4],
 ];
-const DURATION = 63.0;
+const DURATION = 60.4;
 
 // ---------- palette ----------
 const C = {
-  black: '#0b0a08', ink: '#0d0b09', wall: '#26302a', wall2: '#1f2823', wood: '#1d140e', wood2: '#2a1d14',
-  paper: '#e3d3b4', paperDark: '#c9b591', light: '255,214,150', blood: '#7d211b', brass: '#9a7a43', pale: '#efe4cc',
+  black: '#0b0a08', ink: '#0d0b09', wall: '#6e4c34', wall2: '#5c3e2a', wood: '#1d140e', wood2: '#2a1d14',
+  paper: '#e3d3b4', paperDark: '#c9b591', light: '255,204,135', blood: '#7d211b', brass: '#9a7a43', pale: '#efe4cc',
 };
 
 // ---------- helpers ----------
@@ -140,7 +140,7 @@ function makeWallpaper() {
   const g = p.getContext('2d');
   g.fillStyle = C.wall; g.fillRect(0, 0, 80, 120);
   g.fillStyle = C.wall2; g.fillRect(0, 0, 6, 120); g.fillRect(40, 0, 2, 120);
-  g.fillStyle = 'rgba(160,170,140,0.07)';
+  g.fillStyle = 'rgba(255,226,180,0.11)';
   // damask-like motif
   g.beginPath(); g.ellipse(23, 40, 9, 16, 0, 0, Math.PI * 2); g.fill();
   g.beginPath(); g.moveTo(23, 14); g.quadraticCurveTo(35, 30, 23, 22); g.quadraticCurveTo(11, 30, 23, 14); g.fill();
@@ -157,15 +157,15 @@ function room({ wainscot = true, frame = false } = {}) {
   }
   if (frame) {
     // an empty picture frame on the wall, slightly crooked (a quiet unease)
-    at(1040, 170, 1, () => { ctx.fillStyle = '#3b2c1a'; ctx.fillRect(-62, -78, 124, 156); ctx.fillStyle = '#161512'; ctx.fillRect(-50, -66, 100, 132); }, 0.05);
+    at(1040, 170, 1, () => { ctx.fillStyle = '#8a6a3a'; ctx.fillRect(-62, -78, 124, 156); ctx.fillStyle = C.paper; ctx.fillRect(-50, -66, 100, 132); at(-4, 40, 0.75, () => rabbit(C.ink, { ears: 0.1 })); }, 0.03);
   }
 }
 /** Darkness everywhere except a warm pool of lamp light centred at (x, y). */
-function lampLight(x, y, r, k, warm = 0.25) {
+function lampLight(x, y, r, k, warm = 0.34) {
   const g = ctx.createRadialGradient(x, y, r * 0.15, x, y, r);
   g.addColorStop(0, `rgba(8,7,5,${0.15 + 0.85 * (1 - k)})`);
-  g.addColorStop(0.55, `rgba(8,7,5,${0.45 + 0.55 * (1 - k)})`);
-  g.addColorStop(1, 'rgba(8,7,5,0.97)');
+  g.addColorStop(0.55, `rgba(12,8,5,${0.28 + 0.6 * (1 - k)})`);
+  g.addColorStop(1, `rgba(12,8,5,${0.74 + 0.24 * (1 - k)})`);
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   if (k > 0) {
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
@@ -199,11 +199,11 @@ function makeGrain() {
 }
 function filmFinish(t) {
   ctx.save();
-  ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = 0.22; ctx.imageSmoothingEnabled = true;
+  ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = 0.14; ctx.imageSmoothingEnabled = true;
   ctx.drawImage(grains[BOIL % grains.length], 0, 0, W, H);
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   const v = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.95);
-  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.72)');
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(20,8,0,0.5)');
   ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
   // flicker + occasional scratch and dust
   const fl = 0.04 * hash(BOIL * 3.1);
@@ -211,7 +211,7 @@ function filmFinish(t) {
   if (hash(BOIL * 5.7) > 0.86) { const x = hash(BOIL * 9.1) * W; ctx.strokeStyle = 'rgba(230,220,200,0.12)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + jit(9, 6), H); ctx.stroke(); }
   for (let i = 0; i < 5; i++) { if (hash(BOIL * 2.3 + i) > 0.7) { ctx.fillStyle = 'rgba(230,220,200,0.18)'; ctx.beginPath(); ctx.arc(hash(BOIL + i * 3.3) * W, hash(BOIL * 1.7 + i) * H, 0.8 + hash(i + BOIL) * 1.6, 0, 7); ctx.fill(); } }
   // muted, slightly green-brown grade
-  ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = 'rgb(236,228,206)'; ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = 'rgb(255,236,210)'; ctx.fillRect(0, 0, W, H);
   ctx.restore();
 }
 /** Iris transition: a circle opening (k 0→1) or closing (k 1→0) around (x, y). */
@@ -227,13 +227,13 @@ const S = {};
 
 S.lamp = (lt) => {
   room({ frame: true });
-  const on = lt < 1.2 ? 0 : lt < 1.5 ? (hash(Math.floor(lt * 30)) > 0.5 ? 1 : 0.2) : 1;
-  const k = on * ease((lt - 1.2) / 1.2 + 0.4);
+  const on = lt < 0.5 ? 0 : lt < 0.8 ? (hash(Math.floor(lt * 30)) > 0.5 ? 1 : 0.4) : 1;
+  const k = on * ease((lt - 0.5) / 1.2 + 0.4);
   deskLamp(250, 650, on, 1.5);
   // light cone on the wall
   if (on) {
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    const g = ctx.createRadialGradient(560, 300, 10, 560, 300, 420); g.addColorStop(0, `rgba(${C.light},${0.16 * k})`); g.addColorStop(1, `rgba(${C.light},0)`);
+    const g = ctx.createRadialGradient(560, 300, 10, 560, 300, 420); g.addColorStop(0, `rgba(${C.light},${0.24 * k})`); g.addColorStop(1, `rgba(${C.light},0)`);
     ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(330, 420); ctx.lineTo(1000, 40); ctx.lineTo(1100, 620); ctx.closePath(); ctx.fill(); ctx.restore();
   }
   lampLight(560, 320, 560, k);
@@ -284,20 +284,22 @@ S.three = (lt) => {
   }
 };
 
-S.alive = (lt) => {
+S.alive = (lt, o = { eye: 1.0, sep: 2.3, hop: 3.4 }) => {
   ctx.fillStyle = C.paper; ctx.fillRect(0, 0, W, H);
-  const pg = ctx.createRadialGradient(560, 330, 40, 640, 360, 760); pg.addColorStop(0, 'rgba(255,236,190,0.15)'); pg.addColorStop(1, 'rgba(70,45,25,0.7)'); ctx.fillStyle = pg; ctx.fillRect(0, 0, W, H);
+  const pg = ctx.createRadialGradient(560, 330, 40, 640, 360, 760); pg.addColorStop(0, 'rgba(255,230,170,0.25)'); pg.addColorStop(1, 'rgba(120,70,30,0.45)'); ctx.fillStyle = pg; ctx.fillRect(0, 0, W, H);
   // grey real-hand shadow stays behind
-  const sep = easeOut((lt - 2.3) / 1.2);
+  const sep = easeOut((lt - o.sep) / 1.2);
   ctx.save(); ctx.filter = 'blur(4px)'; ctx.globalAlpha = 0.55 - 0.25 * sep; at(560, 470, 1.7, () => handRabbit('#2a221b'), -0.08); ctx.restore();
   // the living shadow: eye opens, then it hops away
-  const eye = lt < 1.0 ? 0 : lt < 1.25 ? (lt - 1.0) / 0.25 : (lt % 3.1 < 0.1 ? 0.1 : 1);
-  const hopT = lt - 3.4;
+  const eye = lt < o.eye ? 0 : lt < o.eye + 0.25 ? (lt - o.eye) / 0.25 : ((lt - o.eye) % 3.1 > 3.0 ? 0.1 : 1);
+  const hopT = lt - o.hop;
   let x = 600, y = 520, sq = 0;
   if (hopT > 0) { const n = Math.floor(hopT / 0.7), f = (hopT % 0.7) / 0.7; x += (n + f) * 190; y -= Math.sin(f * Math.PI) * 110; sq = f < 0.15 ? -0.12 : Math.sin(f * Math.PI) * 0.12; }
-  at(x, y, 2.4 * lerp(0.92, 1, sep), () => rabbit(C.ink, { eye, ears: Math.sin(lt * 6) * 0.15 + (hopT > 0 ? 0.4 : 0), squash: sq, eyeCol: lt > 1 && lt < 2.2 ? '#d8c27a' : C.pale }));
+  at(x, y, 2.4 * lerp(0.92, 1, sep), () => rabbit(C.ink, { eye, ears: Math.sin(lt * 6) * 0.15 + (hopT > 0 ? 0.4 : 0), squash: sq, eyeCol: lt > o.eye && lt < o.eye + 1.2 ? '#ffd27a' : C.pale }));
   ctx.fillStyle = 'rgba(40,30,20,0.25)'; ctx.fillRect(0, 600, W, 120);
 };
+
+S.open = (lt) => S.alive(lt, { eye: 1.6, sep: 2.9, hop: 3.7 });
 
 S.size = (lt) => {
   // an engraving-style diagram: lamp, hand, wall, with light rays
@@ -324,10 +326,10 @@ S.size = (lt) => {
 };
 
 S.wolf = (lt) => {
-  ctx.fillStyle = '#1b2025'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#3d3552'; ctx.fillRect(0, 0, W, H);
   // moonlit paper backdrop
-  const g = ctx.createRadialGradient(900, 160, 20, 900, 160, 700); g.addColorStop(0, 'rgba(230,220,190,0.55)'); g.addColorStop(1, 'rgba(20,24,28,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  blob(ell(940, 150, 46, 46), '#e8dcb8', 1, 150);
+  const g = ctx.createRadialGradient(900, 160, 20, 900, 160, 700); g.addColorStop(0, 'rgba(255,214,150,0.6)'); g.addColorStop(1, 'rgba(60,40,70,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  blob(ell(940, 150, 46, 46), '#ffe4a6', 1, 150);
   // fence
   for (let x = 40; x < W; x += 70) polyPts([[x - 9, 720], [x - 9, 470], [x, 455], [x + 9, 470], [x + 9, 720]], '#0e0c0a', 0.8, 160 + x);
   polyPts([[0, 500], [W, 500], [W, 514], [0, 514]], '#0e0c0a', 0.8, 170);
@@ -349,7 +351,7 @@ S.wolf = (lt) => {
     const f = howl - 0.4 - i * 0.12;
     const fly = f > 0 ? f : 0;
     const X = x + fly * 260 + jit(i, 0.5), Y = 455 - fly * 300 - Math.sin(fly * 9) * 6;
-    at(X, Y, 2.0, () => crow('#0b0908', { flap: fly > 0 ? Math.sin(fly * 26) * 0.9 : Math.sin(lt * 2 + i) * 0.08, eyeCol: i === 1 ? C.blood : '#cbbf9e' }));
+    at(X, Y, 2.0, () => crow('#0b0908', { flap: fly > 0 ? Math.sin(fly * 26) * 0.9 : Math.sin(lt * 2 + i) * 0.08, eyeCol: '#efe1bd' }));
   });
 };
 
@@ -401,29 +403,35 @@ S.moon = (lt) => {
       }, jit(i, 0.02, 3));
     }
   } else {
-    // night sky with a sleeping moon; one eye opens at the end
+    // evening sky with a sleepy moon that wakes up smiling
     const lt2 = lt - 3.6;
-    ctx.fillStyle = '#10141a'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#2e2c4c'; ctx.fillRect(0, 0, W, H);
     for (let i = 0; i < 70; i++) { const tw = 0.4 + 0.6 * hash(i + BOIL * 0.5); blob(ell(hash(i * 3.3) * W, hash(i * 7.1) * 470, 1.4 * tw, 1.4 * tw, 0, 6), 'rgba(240,226,190,0.8)', 0.2, 300 + i); }
     const rise = easeOut(lt2 / 4.5);
     const mx = 640, my = lerp(470, 300, rise);
-    const glow = ctx.createRadialGradient(mx, my, 60, mx, my, 330); glow.addColorStop(0, 'rgba(240,226,180,0.35)'); glow.addColorStop(1, 'rgba(240,226,180,0)'); ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
-    blob(ell(mx, my, 150, 150, 0, 28), '#efe2bd', 1.4, 320);
+    const glow = ctx.createRadialGradient(mx, my, 60, mx, my, 330); glow.addColorStop(0, 'rgba(255,220,150,0.45)'); glow.addColorStop(1, 'rgba(255,220,150,0)'); ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+    blob(ell(mx, my, 150, 150, 0, 28), '#ffe7ad', 1.4, 320);
     blob(ell(mx - 50, my - 40, 28, 18), 'rgba(170,150,110,0.35)', 1, 321); blob(ell(mx + 60, my + 50, 22, 14), 'rgba(170,150,110,0.3)', 1, 322);
     // eyes: closed lines, the right one opens
-    const open = ease((lt2 - 2.6) / 0.5);
-    line(mx - 70, my - 10, mx - 30, my - 8, 4, '#4b3d2a', 0.6, 330);
-    if (open < 0.05) line(mx + 30, my - 8, mx + 70, my - 10, 4, '#4b3d2a', 0.6, 331);
-    else { blob(ell(mx + 50, my - 9, 22, 14 * open), '#f7f0dc', 0.6, 332); blob(ell(mx + 52 + Math.sin(lt * 0.8) * 3, my - 9, 8, 8 * open), '#15110c', 0.3, 333); }
-    line(mx - 20, my + 55, mx + 20, my + 57, 3.5, '#4b3d2a', 0.6, 334);
+    // sleeping, then waking with a smile (and a little stretch of the brows)
+    const open = ease((lt2 - 2.4) / 0.6);
+    blob(ell(mx - 70, my + 28, 18, 10), `rgba(240,140,110,${0.25 + 0.25 * open})`, 0.5, 335);
+    blob(ell(mx + 70, my + 28, 18, 10), `rgba(240,140,110,${0.25 + 0.25 * open})`, 0.5, 336);
+    for (const sx of [-1, 1]) {
+      const ex = mx + sx * 50, ey = my - 10;
+      if (open < 0.05) { ctx.strokeStyle = '#6b4f30'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(ex, ey - 6, 18, 0.25 * Math.PI, 0.75 * Math.PI); ctx.stroke(); }
+      else { blob(ell(ex, ey, 17, 15 * open), '#fff8e6', 0.5, 337 + sx); blob(ell(ex + 2, ey + 2 * open, 7, 7 * open), '#3a2a18', 0.3, 339 + sx); blob(ell(ex + 4, ey - 2, 2, 2 * open), '#fff8e6', 0.1, 341 + sx); }
+    }
+    ctx.strokeStyle = '#6b4f30'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.beginPath();
+    ctx.arc(mx, my + 30, 26 + 8 * open, (0.2 - 0.05 * open) * Math.PI, (0.8 + 0.05 * open) * Math.PI); ctx.stroke();
     // hills and the wolf silhouette under the moon
-    polyPts([[0, 720], [0, 600], [240, 570], [520, 610], [800, 575], [1100, 600], [1280, 580], [1280, 720]], '#07080a', 1.4, 340);
-    at(230, 560, 2.6, () => wolf('#07080a', { jaw: 0.7, eyeCol: '#07080a' }), -0.25);
+    polyPts([[0, 720], [0, 600], [240, 570], [520, 610], [800, 575], [1100, 600], [1280, 580], [1280, 720]], '#16121c', 1.4, 340);
+    at(230, 560, 2.6, () => wolf('#16121c', { jaw: 0.7, eyeCol: '#16121c' }), -0.25);
   }
 };
 
 S.title = (lt) => {
-  ctx.fillStyle = '#0c0a08'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#2a1a10'; ctx.fillRect(0, 0, W, H);
   lampLight(640, 330, 680, 1, 0.16);
   // paper screen with the hand shadow
   const show = ease(lt / 1.2);
@@ -470,8 +478,8 @@ function render(t) {
   filmFinish(t);
   // transitions
   const toEnd = b - t;
-  const irisScenes = { hands: [840, 360], wolf: [300, 370], moon: [640, 360] };
-  if (id === 'lamp') fadeBlack(1 - ease(t / 0.8));
+  const irisScenes = { lamp: [375, 340], wolf: [300, 370], moon: [640, 360] };
+  if (id === 'open') fadeBlack(1 - ease(t / 0.6));
   else if (irisScenes[id] && lt < 0.7) iris(lt / 0.7, ...irisScenes[id]);
   else if (lt < 0.45) fadeBlack(1 - lt / 0.45);
   if (id === 'title') fadeBlack(ease((t - (DURATION - 1.2)) / 1.2));

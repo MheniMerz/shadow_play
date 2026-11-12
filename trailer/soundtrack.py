@@ -1,6 +1,6 @@
 """Synthesise the trailer's music bed and sound effects (48 kHz stereo), timed to trailer.html."""
 import numpy as np, soundfile as sf
-SR = 48000; DUR = 63.0; N = int(SR * DUR)
+SR = 48000; DUR = 60.4; N = int(SR * DUR)
 rng = np.random.default_rng(7)
 music = np.zeros((N, 2)); sfx = np.zeros((N, 2))
 t_all = np.arange(N) / SR
@@ -23,28 +23,28 @@ def lowpass(x, k):  # simple one-pole
 
 def mtof(m): return 440 * 2 ** ((m - 69) / 12)
 
-# --- drone: A minor, slow breathing tremolo ---
+# --- warm drone: C major, slow breathing tremolo ---
 dr = np.zeros(N)
-for f, g in [(55, 0.5), (82.41, 0.28), (110, 0.22), (130.81, 0.08)]:
+for f, g in [(65.41, 0.45), (98.0, 0.25), (130.81, 0.2), (164.81, 0.08)]:
     dr += g * np.sin(2 * np.pi * f * t_all + 0.3 * np.sin(2 * np.pi * 0.07 * t_all))
 dr *= 0.6 + 0.4 * np.sin(2 * np.pi * 0.11 * t_all) ** 2
 fade = np.clip(t_all / 3, 0, 1) * np.clip((DUR - t_all) / 2.5, 0, 1)
-music[:, 0] += dr * 0.10 * fade; music[:, 1] += dr * 0.10 * fade
+music[:, 0] += dr * 0.08 * fade; music[:, 1] += dr * 0.08 * fade
 # wind: filtered noise
 wind = np.convolve(rng.standard_normal(N), np.ones(400) / 400, mode='same') * (0.5 + 0.5 * np.sin(2 * np.pi * 0.05 * t_all))
-music[:, 0] += wind * 0.35 * fade; music[:, 1] += np.roll(wind, 2000) * 0.35 * fade
+music[:, 0] += wind * 0.15 * fade; music[:, 1] += np.roll(wind, 2000) * 0.15 * fade
 
-# --- music box waltz (A harmonic minor), sparse and slightly out of tune ---
+# --- music box waltz in C major, gentle and a touch out of tune like an old toy ---
 def mbox(m, dur=1.6):
     n = int(dur * SR); t = np.arange(n) / SR; f = mtof(m) * (1 + rng.normal(0, 0.002))
     s = np.sin(2 * np.pi * f * t) + 0.35 * np.sin(2 * np.pi * f * 3.01 * t) * np.exp(-t / 0.15) + 0.15 * np.sin(2 * np.pi * f * 5.4 * t) * np.exp(-t / 0.05)
     return s * env(n, 0.002, decay=0.55)
-phrase = [81, 84, 88, 83, 81, 80, 76, 77, 76, 72, 74, 76, 81, 80, 76, None]
-beat = 60 / 76
-t = 2.4; i = 0
-while t < 60.5:
+phrase = [72, 76, 79, 84, 81, 79, 77, 76, 74, 77, 81, 79, 76, 74, 72, None]
+beat = 60 / 84
+t = 1.0; i = 0
+while t < 58.0:
     m = phrase[i % len(phrase)]
-    if m is not None and not (33.8 < t < 39.5):  # let the wolf scene breathe
+    if m is not None and not (31.2 < t < 36.8):  # let the wolf scene breathe
         place(music, mbox(m), t, pan=rng.uniform(-0.4, 0.4), gain=0.12)
         if i % 4 == 0: place(music, mbox(m - 24, 2.2), t, gain=0.07)
     t += beat; i += 1
@@ -79,22 +79,23 @@ def swell(freqs, dur=3.0):
     n = int(dur * SR); t = np.arange(n) / SR; s = sum(np.sin(2 * np.pi * f * t + 0.2 * np.sin(2 * np.pi * 0.3 * t)) for f in freqs)
     return s / len(freqs) * np.sin(np.pi * t / dur) ** 2
 
-place(sfx, click(), 1.2, -0.5, 0.6); place(sfx, click(), 1.28, -0.5, 0.35); place(sfx, click(), 1.42, -0.5, 0.5)
-place(sfx, whoosh(1.6), 8.8, 0.3, 0.12)
-for k, tt in enumerate([15.7, 16.4, 17.35]):
-    place(sfx, creak(0.5), tt - 0.25, [-0.5, 0, 0.5][k], 0.25); place(sfx, thud(90, 0.4), tt + 0.25, [-0.5, 0, 0.5][k], 0.35)
-place(sfx, tink(2600), 22.1, 0, 0.12)
-for tt in [24.4 + 0.7 * k for k in range(3)]: place(sfx, thud(140, 0.25), tt + 0.62, 0.3, 0.25)
+# cold open: the shadow wakes (1.6 s) and hops away (3.7 s)
+place(sfx, tink(2600), 1.65, 0, 0.12); place(sfx, tink(3300), 1.8, 0.2, 0.08)
+for k in range(3): place(sfx, thud(150, 0.25), 3.7 + 0.7 * k + 0.62, 0.3, 0.25)
+place(sfx, click(), 6.5, -0.5, 0.6); place(sfx, click(), 6.58, -0.5, 0.35); place(sfx, click(), 6.7, -0.5, 0.5)
+place(sfx, whoosh(1.6), 13.0, 0.3, 0.1)
+for k, tt in enumerate([19.29, 20.05, 20.95]):
+    place(sfx, creak(0.5), tt - 0.25, [-0.5, 0, 0.5][k], 0.15); place(sfx, thud(110, 0.35), tt + 0.25, [-0.5, 0, 0.5][k], 0.3); place(sfx, tink([2093, 2637, 3136][k]), tt + 0.3, [-0.5, 0, 0.5][k], 0.06)
 n = int(1.4 * SR); tt = np.arange(n) / SR
-place(sfx, np.sin(2 * np.pi * np.cumsum(np.interp(tt, [0, 1.4], [200, 420])) / SR) * np.sin(np.pi * tt / 1.4) ** 2, 29.0, 0, 0.05)
-place(sfx, np.sin(2 * np.pi * np.cumsum(np.interp(tt, [0, 1.4], [420, 200])) / SR) * np.sin(np.pi * tt / 1.4) ** 2, 31.3, 0, 0.05)
-place(sfx, howl(), 36.45, -0.4, 0.22)
-place(sfx, flaps(1.4), 36.9, 0.4, 0.28)
-for k in range(10): place(sfx, splash(), 41.0 + 0.55 * k + 0.4, 0, 0.15)
-place(sfx, swell([220, 261.6, 329.6, 415.3], 4.0), 49.6, 0, 0.12)
-place(sfx, swell([233.1, 349.2], 1.6), 52.4, 0.2, 0.1)
-place(sfx, thud(48, 2.5) + 0.3 * swell([110, 164.8], 2.5), 55.4, 0, 0.5)
-place(sfx, mbox(81, 3), 60.3, 0, 0.12); place(sfx, mbox(76, 3), 60.9, 0, 0.1); place(sfx, mbox(69, 4), 61.5, 0, 0.12)
+place(sfx, np.sin(2 * np.pi * np.cumsum(np.interp(tt, [0, 1.4], [262, 523])) / SR) * np.sin(np.pi * tt / 1.4) ** 2, 26.4, 0, 0.05)
+place(sfx, np.sin(2 * np.pi * np.cumsum(np.interp(tt, [0, 1.4], [523, 262])) / SR) * np.sin(np.pi * tt / 1.4) ** 2, 28.7, 0, 0.05)
+place(sfx, howl(), 33.85, -0.4, 0.2)
+place(sfx, flaps(1.4), 34.25, 0.4, 0.26)
+for k in range(10): place(sfx, splash(), 38.8 + 0.55 * k, 0, 0.14)
+place(sfx, swell([261.6, 329.6, 392.0, 523.3], 4.0), 46.8, 0, 0.1)
+for k, f in enumerate([1568, 2093, 2637, 3136]): place(sfx, tink(f), 49.6 + 0.09 * k, -0.3 + 0.2 * k, 0.07)
+place(sfx, swell([130.8, 196.0, 261.6, 329.6], 3.0), 52.6, 0, 0.18); place(sfx, thud(65, 1.5), 52.7, 0, 0.25)
+place(sfx, mbox(84, 3), 57.4, 0, 0.12); place(sfx, mbox(79, 3), 58.0, 0, 0.1); place(sfx, mbox(72, 4), 58.6, 0, 0.12)
 
 sf.write('music.wav', music.astype(np.float32), SR)
 sf.write('sfx.wav', sfx.astype(np.float32), SR)
