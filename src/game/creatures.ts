@@ -30,6 +30,15 @@ function eye(x: number, y: number, r: number): Mesh {
   return m;
 }
 
+/** Cream cut lines give the silhouettes a woodcut finish; included in rig fades. */
+function engraving(body: Group, shapes: ReturnType<typeof poly>[]): MeshBasicMaterial {
+  const mat = inkMaterial(0xc8bd97, 0.85);
+  const lines = part(shapes, mat, 'paper-engraving');
+  lines.position.z = 0.00035;
+  body.add(lines);
+  return mat;
+}
+
 export function buildRabbit(color: number = INK): CreatureRig {
   const mat = inkMaterial(color);
   const root = new Group();
@@ -43,7 +52,19 @@ export function buildRabbit(color: number = INK): CreatureRig {
   const earR = pivot(0.026, 0.055, part(ellipse(0.024, 0.077, 0.0055, 0.022, -0.05), mat, 'ear'));
   const e = eye(0.03, 0.049, 0.0028);
   body.add(torso, head, tail, foot, earL, earR, e);
-  return { root, mats: [mat, e.material as MeshBasicMaterial], eyes: [e], ears: [earL, earR], body, height: 0.1, mouth: new Vector2(0.04, 0.045) };
+  const lines = engraving(body, [
+    ellipse(-0.015, 0.017, 0.013, 0.0012, -0.8),
+    poly([[0.036, 0.044], [0.043, 0.045], [0.04, 0.041]]),
+    poly([[0.034, 0.04], [0.046, 0.036], [0.034, 0.039]]),
+    poly([[0.034, 0.042], [0.047, 0.041], [0.034, 0.041]]),
+  ]);
+  // Ear inserts follow the existing ear pivots and their wiggle animation.
+  for (const [ear, x, y, rot] of [[earL, 0.012, 0.075, -0.25], [earR, 0.024, 0.077, -0.05]] as const) {
+    const insert = part(ellipse(x - ear.position.x, y - ear.position.y, 0.0016, 0.014, rot), lines, 'ear-cut');
+    insert.position.z = 0.00035;
+    ear.add(insert);
+  }
+  return { root, mats: [mat, lines, e.material as MeshBasicMaterial], eyes: [e], ears: [earL, earR], body, height: 0.1, mouth: new Vector2(0.04, 0.045) };
 }
 
 export function buildWolf(color: number = INK): CreatureRig {
@@ -83,7 +104,12 @@ export function buildWolf(color: number = INK): CreatureRig {
   const e = part(poly(P([[-0.001, 0.016], [0.004, 0.019], [0.009, 0.016], [0.004, 0.014]])), inkMaterial(PAPER), 'eye');
   e.position.z = 0.0004;
   body.add(ruff, earBack, head, earFront, jaw, e);
-  return { root, mats: [mat, e.material as MeshBasicMaterial], eyes: [e], ears: [earFront], jaw, body, height: 0.1, mouth: new Vector2(0.066 * k, -0.006 * k) };
+  const lines = engraving(body, [
+    poly(P([[-0.026, -0.025], [-0.043, -0.048], [-0.032, -0.041], [-0.037, -0.055], [-0.021, -0.035]])),
+    poly(P([[-0.016, 0.053], [-0.019, 0.031], [-0.01, 0.031]])),
+    poly(P([[0.018, 0.004], [0.054, 0.001], [0.018, 0.002]])),
+  ]);
+  return { root, mats: [mat, lines, e.material as MeshBasicMaterial], eyes: [e], ears: [earFront], jaw, body, height: 0.1, mouth: new Vector2(0.066 * k, -0.006 * k) };
 }
 
 export function buildDuck(color: number = INK): CreatureRig {
@@ -96,13 +122,18 @@ export function buildDuck(color: number = INK): CreatureRig {
   const head = part(ellipse(0.028, 0.044, 0.012, 0.011), mat, 'head');
   const beakTop = part(poly([[0.036, 0.048], [0.058, 0.043], [0.036, 0.04]]), mat, 'beak-top');
   const beakLow = pivot(0.036, 0.04, part(poly([[0.036, 0.04], [0.054, 0.039], [0.036, 0.036]]), mat, 'beak-low'));
-  const wing = part(ellipse(-0.008, 0.008, 0.018, 0.007, 0.15), inkMaterial(0x3a2f28), 'wing');
+  const wing = part(blob([[-0.032, 0.012], [-0.006, 0.016], [0.012, 0.008], [-0.005, -0.005], [-0.026, 0.001]]), inkMaterial(0x4a635e), 'wing');
   wing.position.z = 0.0003;
   const e = eye(0.031, 0.047, 0.0024);
   body.add(hull, neck, head, beakTop, beakLow, wing, e);
+  const lines = engraving(body, [
+    poly([[-0.026, 0.009], [-0.008, 0.004], [0.001, 0.008], [-0.008, 0.002]]),
+    poly([[-0.025, 0.005], [-0.012, 0.0], [-0.004, 0.003], [-0.012, -0.002]]),
+    ellipse(0.025, 0.024, 0.001, 0.008, -0.3),
+  ]);
   return {
     root,
-    mats: [mat, wing.material as MeshBasicMaterial, e.material as MeshBasicMaterial],
+    mats: [mat, lines, wing.material as MeshBasicMaterial, e.material as MeshBasicMaterial],
     eyes: [e],
     jaw: beakLow,
     body,
