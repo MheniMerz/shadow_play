@@ -1,4 +1,11 @@
 import { defineAssets } from '@iwsdk/core';
+import { buildDuck, buildRabbit, buildWolf } from './game/creatures.js';
+import { theatreFrame } from './scene-assets/theatre-frame.scene-asset.js';
 
-// Shadow Play ships no external assets: textures and sounds are generated at runtime.
-export default defineAssets({});
+// Deterministic prototypes are also available for isolated editor inspection.
+export default defineAssets({
+  theatreFrame,
+  paperRabbit: buildRabbit().root,
+  paperWolf: buildWolf().root,
+  paperDuck: buildDuck().root,
+});

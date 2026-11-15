@@ -24,6 +24,7 @@ import {
   Vector3,
 } from '@iwsdk/core';
 import { paperTexture, TextCanvas } from './canvas.js';
+import { buildTheatreFrame } from '../scene-assets/theatre-frame.scene-asset.js';
 import { LAMP_COLOR, LAMP_POS, LAMP_VISUAL_POS, SCREEN_H, SCREEN_W, STAGE_DISTANCE, STAGE_DROP } from './config.js';
 
 const HANDLE_OFFSET = new Vector3(0, -SCREEN_H / 2 - 0.045, 0.05);
@@ -61,25 +62,16 @@ export class Stage {
     this.screen.receiveShadow = true;
     this.root.add(this.screen);
 
-    // Thin wooden frame and two little feet
+    this.root.add(buildTheatreFrame());
+    // The lamp uses the same warm wood as the theatre hardware.
     const wood = new MeshStandardMaterial({ color: 0x5b3b24, roughness: 0.8 });
-    const t = 0.012;
-    const bars: [number, number, number, number][] = [
-      [0, SCREEN_H / 2 + t / 2, SCREEN_W + 2 * t, t],
-      [0, -SCREEN_H / 2 - t / 2, SCREEN_W + 2 * t, t],
-      [-SCREEN_W / 2 - t / 2, 0, t, SCREEN_H],
-      [SCREEN_W / 2 + t / 2, 0, t, SCREEN_H],
-    ];
-    for (const [x, y, w, h] of bars) {
-      const bar = new Mesh(new BoxGeometry(w, h, 0.01), wood);
-      bar.position.set(x, y, 0);
-      this.root.add(bar);
-    }
-    for (const sx of [-1, 1]) {
-      const foot = new Mesh(new BoxGeometry(0.02, 0.012, 0.09), wood);
-      foot.position.set(sx * (SCREEN_W / 2 - 0.03), -SCREEN_H / 2 - t - 0.006, 0.0);
-      this.root.add(foot);
-    }
+
+    const title = new TextCanvas(768, 96, { font: '500 56px Georgia, serif', color: '#ffe7b4', background: '#263e3c' });
+    title.set('S H A D O W  P L A Y');
+    const titleMesh = new Mesh(new PlaneGeometry(0.25, 0.03125), new MeshBasicMaterial({ map: title.texture, transparent: true }));
+    titleMesh.name = 'theatre-marquee';
+    titleMesh.position.set(0, SCREEN_H / 2 + 0.07, 0.002);
+    this.root.add(titleMesh);
 
     this.content.name = 'screen-content';
     this.content.position.z = 0.001;

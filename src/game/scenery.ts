@@ -3,15 +3,16 @@ import { Group, type Mesh, type MeshBasicMaterial } from '@iwsdk/core';
 import { SCREEN_H, SCREEN_W } from './config.js';
 import type { Prop, SceneDef } from './levels.js';
 import { blob, ellipse, inkMaterial, part, poly } from './shapes2d.js';
+import { PALETTE } from './palette.js';
 
 const BOTTOM = -SCREEN_H / 2;
 const TOP = SCREEN_H / 2;
 const LEFT = -SCREEN_W / 2;
 const RIGHT = SCREEN_W / 2;
 
-const HILL = 0x4a3a2e;
-const WATER = 0x34465a;
-const PROP = 0x3f3027;
+const HILL = PALETTE.hill;
+const WATER = PALETTE.water;
+const PROP = PALETTE.grass;
 
 function clampX(x: number) {
   return Math.max(LEFT, Math.min(RIGHT, x));
@@ -28,7 +29,17 @@ function hill(x0: number, x1: number, y: number, seed: number): Mesh {
     pts.push([x, y + bump]);
   }
   pts.push([x1, BOTTOM]);
-  return part(poly(pts), inkMaterial(HILL, 0.92), 'hill');
+  const ground = part(poly(pts), inkMaterial(HILL), 'hill');
+  // One continuous golden cut edge, with a few carved seed marks below it.
+  const details = new Group();
+  const rim: [number, number][] = pts.slice(1, -1);
+  details.add(part(poly([...rim, ...rim.slice().reverse().map(([x, yy]): [number, number] => [x, yy - 0.0015])]), inkMaterial(PALETTE.gold, 0.75), 'cut-edge'));
+  const seeds = [];
+  for (let x = x0 + 0.009; x < x1 - 0.006; x += 0.017) seeds.push(ellipse(x, y - 0.013 - 0.004 * Math.sin(x * 240), 0.0015, 0.0006, 0.5));
+  if (seeds.length) details.add(part(seeds, inkMaterial(0x90a48b, 0.55), 'soil-seeds'));
+  ground.add(details);
+  details.position.z = 0.0002;
+  return ground;
 }
 
 function pond(x0: number, x1: number, y: number): Group {
@@ -57,7 +68,11 @@ function propMesh(p: Prop): Group {
       for (let i = 0; i < 5; i++) {
         const x = (i - 2) * 0.008 * s;
         const h = (0.025 + ((i * 7) % 3) * 0.008) * s;
-        g.add(part(poly([[x - 0.003 * s, 0], [x + (i - 2) * 0.004 * s, h], [x + 0.003 * s, 0]]), m));
+        const lean = (i - 2) * 0.006 * s;
+        g.add(part(blob([[x - 0.002 * s, 0], [x - 0.002 * s, h * 0.48], [x + lean, h], [x + 0.003 * s, h * 0.55], [x + 0.003 * s, 0]]), m, 'grass-blade'));
+        if (i % 2 === 0) {
+          g.add(part(ellipse(x + lean * 0.65, h * 0.78, 0.003 * s, 0.006 * s, -lean * 30), inkMaterial(PALETTE.gold, 0.85), 'seed-head'));
+        }
       }
       break;
     case 'lantern': {
@@ -85,6 +100,12 @@ function propMesh(p: Prop): Group {
       g.add(part(poly([[-0.21, 0.015], [0.21, 0.015], [0.21, 0.022], [-0.21, 0.022]]), m));
       break;
     case 'tree':
+      // Scalloped foliage sits behind the branch silhouette.
+      for (const [x, y, rx, ry] of [[-0.023, 0.11, 0.03, 0.031], [0.018, 0.132, 0.036, 0.032], [0, 0.154, 0.029, 0.027]]) {
+        const crown = part(ellipse(x, y, rx, ry), inkMaterial(PALETTE.woodland), 'tree-crown');
+        crown.position.z = -0.0001;
+        g.add(crown);
+      }
       g.add(part(poly([[-0.006, 0], [-0.004, 0.1], [0.004, 0.1], [0.006, 0]]), m));
       g.add(part(poly([[0, 0.09], [0.035, 0.13], [0.038, 0.127], [0.003, 0.085]]), m));
       g.add(part(poly([[0, 0.07], [-0.03, 0.1], [-0.033, 0.097], [-0.002, 0.065]]), m));
@@ -133,6 +154,9 @@ export function buildCrow(): Group {
   const wing = new Group();
   wing.name = 'wing';
   wing.add(part(poly([[0, 0], [-0.02, 0.016], [-0.006, 0.002]]), m));
+  const feather = part(poly([[-0.003, 0.003], [-0.016, 0.013], [-0.007, 0.003]]), inkMaterial(0x708079), 'wing-feather');
+  feather.position.z = 0.0001;
+  wing.add(feather);
   wing.position.set(0.002, 0.006, 0.0003);
   g.add(wing);
   const eye = part(ellipse(0.016, 0.016, 0.0015, 0.0015), inkMaterial(0xf3e7d3, 1));
@@ -146,6 +170,12 @@ export function buildMoon(): Group {
   g.name = 'moon';
   const face = part(ellipse(0, 0, 0.03, 0.03), inkMaterial(0xfff1c8, 0.95), 'moon-face');
   g.add(face);
+  const halo = part(ellipse(0, 0, 0.037, 0.037), inkMaterial(PALETTE.gold, 0.16), 'moon-halo');
+  halo.position.z = -0.0001;
+  g.add(halo);
+  const craters = part([ellipse(-0.015, 0.014, 0.006, 0.004, 0.5), ellipse(0.018, -0.008, 0.004, 0.006), ellipse(-0.011, -0.016, 0.003, 0.002)], inkMaterial(0xd6b477, 0.3), 'moon-paper-marks');
+  craters.position.z = 0.0001;
+  g.add(craters);
   const lid = inkMaterial(0x6b5a40, 0.9);
   for (const sx of [-1, 1]) {
     const e = part(ellipse(sx * 0.01, 0.004, 0.006, 0.0015), lid, 'moon-eye');

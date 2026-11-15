@@ -3,6 +3,7 @@
  * generated at runtime so the game ships with no image assets.
  */
 import { CanvasTexture, LinearFilter, SRGBColorSpace } from '@iwsdk/core';
+import { paintBackdrop } from './backdrop.js';
 
 function mulberry(seed: number) {
   let s = seed >>> 0;
@@ -24,6 +25,7 @@ export function paperTexture(w = 1024, h = 744, seed = 3): CanvasTexture {
   const rnd = mulberry(seed);
   g.fillStyle = '#f3e7d3';
   g.fillRect(0, 0, w, h);
+  paintBackdrop(g, w, h);
   // blotches
   for (let i = 0; i < 90; i++) {
     const x = rnd() * w;
@@ -112,6 +114,12 @@ export class TextCanvas {
       g.beginPath();
       g.roundRect(2, 2, width - 4, height - 4, r);
       g.fill();
+      // An inset rule gives the paper labels a quiet letterpress edge.
+      g.strokeStyle = 'rgba(154,119,62,0.45)';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.roundRect(7, 7, width - 14, height - 14, Math.min(18, height / 4));
+      g.stroke();
     }
     g.font = font;
     g.fillStyle = color;
