@@ -30,13 +30,13 @@ function hill(x0: number, x1: number, y: number, seed: number): Mesh {
   }
   pts.push([x1, BOTTOM]);
   const ground = part(poly(pts), inkMaterial(HILL), 'hill');
-  // One continuous golden cut edge, with a few carved seed marks below it.
+  // Muted teal transmission along the raw cut-paper edge.
   const details = new Group();
   const rim: [number, number][] = pts.slice(1, -1);
-  details.add(part(poly([...rim, ...rim.slice().reverse().map(([x, yy]): [number, number] => [x, yy - 0.0015])]), inkMaterial(PALETTE.gold, 0.75), 'cut-edge'));
+  details.add(part(poly([...rim, ...rim.slice().reverse().map(([x, yy]): [number, number] => [x, yy - 0.001])]), inkMaterial(0x62877a, 0.45), 'cut-edge'));
   const seeds = [];
   for (let x = x0 + 0.009; x < x1 - 0.006; x += 0.017) seeds.push(ellipse(x, y - 0.013 - 0.004 * Math.sin(x * 240), 0.0015, 0.0006, 0.5));
-  if (seeds.length) details.add(part(seeds, inkMaterial(0x90a48b, 0.55), 'soil-seeds'));
+  if (seeds.length) details.add(part(seeds, inkMaterial(0x536664, 0.28), 'soil-seeds'));
   ground.add(details);
   details.position.z = 0.0002;
   return ground;
@@ -50,7 +50,7 @@ function pond(x0: number, x1: number, y: number): Group {
   for (let k = 0; k < 3; k++) {
     const yy = y - 0.012 - k * 0.012;
     for (let x = x0 + 0.01 + k * 0.008; x < x1 - 0.02; x += 0.04) {
-      const r = part(ellipse(x + 0.01, yy, 0.012, 0.0015), inkMaterial(0xb8c4cc, 0.35), 'ripple');
+      const r = part(ellipse(x + 0.01, yy, 0.012, 0.0006), inkMaterial(0x9baf9d, 0.22), 'ripple');
       r.position.z = 0.0002;
       g.add(r);
     }
@@ -92,7 +92,7 @@ function propMesh(p: Prop): Group {
       break;
     case 'flag':
       g.add(part(poly([[-0.0015, 0], [-0.0015, 0.06], [0.0015, 0.06], [0.0015, 0]]), m));
-      g.add(part(poly([[0.0015, 0.06], [0.025, 0.05], [0.0015, 0.04]]), inkMaterial(0xa8342a, 0.9)));
+      g.add(part(poly([[0.0015, 0.06], [0.025, 0.05], [0.019, 0.045], [0.024, 0.039], [0.0015, 0.04]]), inkMaterial(0x2f4c49)));
       break;
     case 'fence':
       for (let x = -0.2; x <= 0.2; x += 0.04) g.add(part(poly([[x - 0.003, 0], [x - 0.003, 0.06], [x, 0.066], [x + 0.003, 0.06], [x + 0.003, 0]]), m));
@@ -100,12 +100,7 @@ function propMesh(p: Prop): Group {
       g.add(part(poly([[-0.21, 0.015], [0.21, 0.015], [0.21, 0.022], [-0.21, 0.022]]), m));
       break;
     case 'tree':
-      // Scalloped foliage sits behind the branch silhouette.
-      for (const [x, y, rx, ry] of [[-0.023, 0.11, 0.03, 0.031], [0.018, 0.132, 0.036, 0.032], [0, 0.154, 0.029, 0.027]]) {
-        const crown = part(ellipse(x, y, rx, ry), inkMaterial(PALETTE.woodland), 'tree-crown');
-        crown.position.z = -0.0001;
-        g.add(crown);
-      }
+      g.add(part(poly([[-0.009,0],[-0.003,0.065],[-0.016,0.1],[-0.009,0.119],[-0.011,0.15],[-0.004,0.128],[-0.004,0.109],[0.004,0.093],[0.012,0.128],[0.025,0.139],[0.018,0.122],[0.009,0.086],[0.003,0.067],[0.008,0]]),m,'gnarled-trunk'));
       g.add(part(poly([[-0.006, 0], [-0.004, 0.1], [0.004, 0.1], [0.006, 0]]), m));
       g.add(part(poly([[0, 0.09], [0.035, 0.13], [0.038, 0.127], [0.003, 0.085]]), m));
       g.add(part(poly([[0, 0.07], [-0.03, 0.1], [-0.033, 0.097], [-0.002, 0.065]]), m));

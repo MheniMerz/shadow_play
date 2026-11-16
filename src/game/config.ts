@@ -28,7 +28,7 @@ export const MAX_SCALE = 2.2;
 export const ALIVE_DELAY = 0.15;
 
 /** Paper palette. */
-export const INK = 0x202c31;
+export const INK = 0x11191b;
 export const PAPER = 0xf3e7d3;
 export const GLOW_COLD = 0x8f8a84;
 export const GLOW_WARM = 0xffb347;

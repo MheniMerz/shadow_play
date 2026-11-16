@@ -1,13 +1,14 @@
 /** Desk theatre, metres; paper centre at origin, audience on +Z. */
-import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, SphereGeometry } from '@iwsdk/core';
+import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, Shape, SphereGeometry } from '@iwsdk/core';
 import { SCREEN_H, SCREEN_W } from '../game/config.js';
+import { ellipse, inkMaterial, part, poly } from '../game/shapes2d.js';
 
 export function buildTheatreFrame(): Group {
   const root = new Group();
   root.name = 'storybook-theatre-frame';
-  const wood = new MeshStandardMaterial({ color: 0x324441, roughness: 0.78 });
-  const edge = new MeshStandardMaterial({ color: 0x182d2e, roughness: 0.9 });
-  const brass = new MeshStandardMaterial({ color: 0xd6b778, metalness: 0.55, roughness: 0.45 });
+  const wood = new MeshStandardMaterial({ color: 0x1a2223, roughness: 0.88 });
+  const edge = new MeshStandardMaterial({ color: 0x101618, roughness: 0.9 });
+  const brass = new MeshStandardMaterial({ color: 0x857b60, metalness: 0.35, roughness: 0.65 });
   const block = (name: string, x: number, y: number, z: number, w: number, h: number, d: number, mat = wood) => {
     const m = new Mesh(new BoxGeometry(w, h, d), mat);
     m.name = name;
@@ -34,6 +35,23 @@ export function buildTheatreFrame(): Group {
   }
   // A narrow shelf makes the cut-paper screen feel seated inside the frame.
   block('stage-apron', 0, -y - 0.002, 0.014, SCREEN_W + 0.045, 0.009, 0.045, edge);
+  const paper = inkMaterial(0x11191b);
+  const arch = new Shape();
+  arch.moveTo(-0.22,0.16); arch.lineTo(0.22,0.16); arch.lineTo(0.22,0.105);
+  arch.bezierCurveTo(0.17,0.15,0.08,0.143,0,0.148);
+  arch.bezierCurveTo(-0.08,0.143,-0.17,0.15,-0.22,0.105);
+  arch.closePath();
+  for (let i=-5;i<=5;i++) arch.holes.push(ellipse(i*0.031,0.155,0.0016,0.0026,0,12));
+  const canopy=part(arch,paper,'pierced-proscenium-arch');
+  canopy.position.z=0.004;
+  canopy.renderOrder=2;
+  root.add(canopy);
+  for (const side of [-1,1]) {
+    const pts: [number,number][] = [[side*0.22,-0.16],[side*0.22,0.15],[side*0.205,0.13],[side*0.203,0.10],[side*0.211,0.065],[side*0.207,0.035],[side*0.214,-0.015],[side*0.209,-0.06],[side*0.214,-0.11],[side*0.205,-0.16]];
+    const wing=part(poly(pts),paper,'torn-paper-stage-wing');
+    wing.position.z=0.004; wing.renderOrder=2; root.add(wing);
+  }
+  block('pendant-stem',0,-y-0.02,-0.002,0.004,0.032,0.004,brass);
   const handleSocket = new Mesh(new CylinderGeometry(0.026, 0.026, 0.004, 32), brass);
   handleSocket.name = 'handle-socket';
   handleSocket.rotation.x = Math.PI / 2;

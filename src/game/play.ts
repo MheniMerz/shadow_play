@@ -7,7 +7,7 @@
 import { Group, Mesh, type MeshBasicMaterial, RingGeometry, type Vector2 } from '@iwsdk/core';
 import type { ShapeId } from '../hand/shapes.js';
 import { MAX_SCALE, MIN_SCALE, REFERENCE_RATIO, SCREEN_H, SCREEN_W } from './config.js';
-import { BUILDERS, type CreatureRig, HintGhost } from './creatures.js';
+import { animatePuppet, BUILDERS, type CreatureRig, HintGhost } from './creatures.js';
 import type { LevelDef, Objective, Platform, SceneDef, StageDef } from './levels.js';
 import { buildCrow, buildFirefly, buildMoon, buildScenery, setOpacity } from './scenery.js';
 import { inkMaterial } from './shapes2d.js';
@@ -202,6 +202,7 @@ export class Play {
       this.duckX = obj.startX;
       if (obj.rider) {
         this.rider = BUILDERS.rabbit();
+        if (this.rider.controls) this.rider.controls.visible = false;
         this.rider.root.scale.setScalar(0.45);
         this.rider.root.position.set(obj.startX - 0.005, (this.scene.ponds?.[0]?.y ?? -0.1) + 0.012, 0.0007);
         this.dynamic.add(this.rider.root);
@@ -447,6 +448,7 @@ export class Play {
       const squash = c.state === 'hopping' ? clamp(c.vy * 0.6, -0.15, 0.2) : Math.sin(t * 3) * 0.015;
       c.rig.body.scale.set(1 - squash * 0.5, 1 + squash, 1);
     }
+    animatePuppet(c.rig, t, c.state === 'hopping', c.y, s);
     if (c.state === 'resting' && c.kind === 'rabbit') {
       // sleeping on the paper until the next hold
       for (const e of c.rig.eyes) e.scale.y = 0.15;
