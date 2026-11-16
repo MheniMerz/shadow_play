@@ -1,147 +1,127 @@
-/**
- * Shadow creatures: flat cut-out silhouettes that live on the paper.
- * Each is built from a few parts so it can blink, wiggle its ears, open its
- * jaw or beak, hop, howl and paddle. Units: metres at scale 1, origin at the
- * creature's feet (rabbit) or centre (wolf, duck), facing +x.
- */
+/** Jointed paper silhouettes. Metres, XY screen plane, audience on +Z. */
 import { Color, Group, type Mesh, type MeshBasicMaterial, Vector2 } from '@iwsdk/core';
 import type { ShapeId } from '../hand/shapes.js';
-import { GLOW_COLD, GLOW_WARM, INK, PAPER } from './config.js';
-import { blob, ellipse, inkMaterial, part, pivot, poly } from './shapes2d.js';
+import { GLOW_COLD, GLOW_WARM, INK, SCREEN_H } from './config.js';
+import { blob, ellipse, inkMaterial, part, poly } from './shapes2d.js';
+import { lace, PuppetParts, type PuppetJoint, type PuppetRod } from '../scene-assets/puppet-parts.js';
 
 export interface CreatureRig {
   root: Group;
-  /** All materials, for fading and recolouring. */
   mats: MeshBasicMaterial[];
   eyes: Mesh[];
-  /** Optional animated parts. */
   ears?: Group[];
   jaw?: Group;
   body?: Group;
-  /** Approximate height at scale 1 (m). */
+  controls?: Group;
+  joints?: PuppetJoint[];
+  rods?: PuppetRod[];
   height: number;
-  /** Mouth/beak tip in creature-local space (for howl waves). */
   mouth: Vector2;
 }
-
-function eye(x: number, y: number, r: number): Mesh {
-  const m = part(ellipse(x, y, r, r * 1.15), inkMaterial(PAPER), 'eye');
-  m.position.z = 0.0004;
-  return m;
-}
-
-/** Cream cut lines give the silhouettes a woodcut finish; included in rig fades. */
-function engraving(body: Group, shapes: ReturnType<typeof poly>[]): MeshBasicMaterial {
-  const mat = inkMaterial(0xc8bd97, 0.85);
-  const lines = part(shapes, mat, 'paper-engraving');
-  lines.position.z = 0.00035;
-  body.add(lines);
-  return mat;
+function rig(p: PuppetParts, height: number, mouth: Vector2): CreatureRig {
+  return { root: p.root, body: p.body, controls: p.controls, mats: p.mats, eyes: p.eyes, joints: p.joints, rods: p.rods, height, mouth };
 }
 
 export function buildRabbit(color: number = INK): CreatureRig {
-  const mat = inkMaterial(color);
-  const root = new Group();
-  const body = new Group();
-  root.add(body);
-  const torso = part(blob([[-0.03, 0.0], [0.012, 0.0], [0.024, 0.016], [0.018, 0.036], [-0.008, 0.042], [-0.032, 0.03], [-0.04, 0.012]]), mat, 'torso');
-  const head = part(ellipse(0.024, 0.046, 0.016, 0.013, 0.2), mat, 'head');
-  const tail = part(ellipse(-0.04, 0.02, 0.008, 0.008), mat, 'tail');
-  const foot = part(ellipse(0.004, 0.003, 0.016, 0.004), mat, 'foot');
-  const earL = pivot(0.018, 0.055, part(ellipse(0.012, 0.075, 0.0055, 0.022, -0.25), mat, 'ear'));
-  const earR = pivot(0.026, 0.055, part(ellipse(0.024, 0.077, 0.0055, 0.022, -0.05), mat, 'ear'));
-  const e = eye(0.03, 0.049, 0.0028);
-  body.add(torso, head, tail, foot, earL, earR, e);
-  const lines = engraving(body, [
-    ellipse(-0.015, 0.017, 0.013, 0.0012, -0.8),
-    poly([[0.036, 0.044], [0.043, 0.045], [0.04, 0.041]]),
-    poly([[0.034, 0.04], [0.046, 0.036], [0.034, 0.039]]),
-    poly([[0.034, 0.042], [0.047, 0.041], [0.034, 0.041]]),
-  ]);
-  // Ear inserts follow the existing ear pivots and their wiggle animation.
-  for (const [ear, x, y, rot] of [[earL, 0.012, 0.075, -0.25], [earR, 0.024, 0.077, -0.05]] as const) {
-    const insert = part(ellipse(x - ear.position.x, y - ear.position.y, 0.0016, 0.014, rot), lines, 'ear-cut');
-    insert.position.z = 0.00035;
-    ear.add(insert);
+  const p = new PuppetParts(color, 'jointed-rabbit');
+  const torso = p.cut(blob([[-0.039,0.017],[-0.032,0.039],[-0.013,0.045],[0.006,0.036],[0.022,0.035],[0.027,0.017],[0.011,0.012],[-0.018,0.01]]), lace(-0.027,0.029,5,0.006));
+  p.edge(p.body, torso, 'teal-paper-edge');
+  p.add(p.body, torso, 'pierced-leather-torso');
+  p.add(p.body, poly([[-0.038,0.027],[-0.048,0.032],[-0.047,0.022],[-0.043,0.015],[-0.035,0.017]]), 'scalloped-tail');
+  // Two genuinely separate thighs, shins and feet, all pivoted on pins.
+  for (const [x,phase,front] of [[-0.022,0,false],[0.012,Math.PI,true]] as const) {
+    const upper = p.hinge(p.body, front ? 'front-shoulder' : 'hind-hip', x,0.023,phase,0.09);
+    const plate = front ? poly([[-0.003,0.004],[0.004,0.004],[0.008,-0.009],[0.003,-0.017],[-0.002,-0.012]]) : blob([[-0.008,0.005],[0.006,0.007],[0.012,-0.006],[0.004,-0.017],[-0.008,-0.012]]);
+    p.add(upper,plate,'upper-leg',p.plate);
+    p.joint(upper,0,0);
+    const shin = p.hinge(upper,'knee',0.004,-0.012,phase+0.8,0.12);
+    p.add(shin,poly([[-0.002,0.002],[0.003,0.002],[0.001,-0.008],[0.013,-0.009],[0.015,-0.012],[-0.004,-0.012]]),'lower-leg-and-foot');
+    p.joint(shin,0,0,0.0021);
+    if (front) p.control(shin,0.001,-0.006,0.016);
   }
-  return { root, mats: [mat, lines, e.material as MeshBasicMaterial], eyes: [e], ears: [earL, earR], body, height: 0.1, mouth: new Vector2(0.04, 0.045) };
+  const neck = p.hinge(p.body,'neck-pin',0.017,0.038,0.7,0.035);
+  const head = p.cut(poly([[-0.006,-0.002],[-0.009,0.009],[-0.003,0.018],[0.009,0.021],[0.016,0.015],[0.021,0.008],[0.029,0.006],[0.027,0.002],[0.014,-0.004],[0.004,-0.006]]),lace(0.002,0.008,2,0.005,0.0008));
+  p.add(neck,head,'angular-rabbit-profile');
+  p.joint(neck,0,0);
+  p.eye(neck,0.014,0.012);
+  const ears: Group[] = [];
+  for (const [x,y,lean] of [[-0.001,0.014,-0.009],[0.009,0.017,0.003]]) {
+    const ear = new Group(); ear.name='pinned-ear'; ear.position.set(x,y,0);
+    neck.add(ear);
+    p.add(ear,p.cut(poly([[-0.003,0],[lean-0.004,0.035],[lean-0.001,0.045],[lean+0.003,0.036],[0.004,0.002]]),[ellipse(lean,0.028,0.0012,0.01)]),'pierced-ear');
+    p.joint(ear,0,0,0.0019);
+    ears.push(ear);
+  }
+  p.control(p.body,-0.018,0.021,-0.015);
+  return { ...rig(p,0.1,new Vector2(0.045,0.044)), ears };
 }
 
 export function buildWolf(color: number = INK): CreatureRig {
-  const mat = inkMaterial(color);
-  const root = new Group();
-  const body = new Group();
-  root.add(body);
-  const k = 0.82; // drawn large, scaled to match the other creatures
-  const P = (pts: [number, number][]): [number, number][] => pts.map(([x, y]) => [x * k, y * k]);
-  // Head in profile, like the classic hand-shadow wolf: sloped brow, long snout, nose bump.
-  const head = part(
-    poly(P([
-      [-0.046, 0.0], [-0.041, 0.017], [-0.029, 0.029], [-0.013, 0.034], [0.002, 0.029], [0.012, 0.021],
-      [0.036, 0.015], [0.058, 0.01], [0.066, 0.008], [0.071, 0.003], [0.07, -0.002], [0.064, -0.004],
-      [0.04, -0.005], [0.016, -0.006], [-0.002, -0.009], [-0.02, -0.02], [-0.04, -0.028], [-0.05, -0.014],
-    ])),
-    mat,
-    'head',
-  );
-  // Neck with a ruff of fur.
-  const ruff = part(
-    poly(P([
-      [-0.047, 0.004], [-0.058, -0.02], [-0.066, -0.064], [-0.012, -0.064], [-0.019, -0.052], [-0.009, -0.047],
-      [-0.02, -0.04], [-0.011, -0.034], [-0.022, -0.028], [-0.016, -0.021], [-0.03, -0.022],
-    ])),
-    mat,
-    'ruff',
-  );
-  const earBack = part(poly(P([[-0.036, 0.024], [-0.031, 0.06], [-0.021, 0.029]])), mat, 'ear-back');
-  const earFront = pivot(-0.014 * k, 0.03 * k, part(poly(P([[-0.026, 0.027], [-0.015, 0.071], [-0.003, 0.03]])), mat, 'ear'));
-  // Hinged lower jaw; rotates open when the player drops their pinky.
-  const jaw = pivot(
-    -0.002 * k,
-    -0.008 * k,
-    part(poly(P([[-0.006, -0.006], [0.02, -0.007], [0.05, -0.008], [0.054, -0.012], [0.032, -0.018], [0.002, -0.02], [-0.014, -0.015]])), mat, 'jaw'),
-  );
-  const e = part(poly(P([[-0.001, 0.016], [0.004, 0.019], [0.009, 0.016], [0.004, 0.014]])), inkMaterial(PAPER), 'eye');
-  e.position.z = 0.0004;
-  body.add(ruff, earBack, head, earFront, jaw, e);
-  const lines = engraving(body, [
-    poly(P([[-0.026, -0.025], [-0.043, -0.048], [-0.032, -0.041], [-0.037, -0.055], [-0.021, -0.035]])),
-    poly(P([[-0.016, 0.053], [-0.019, 0.031], [-0.01, 0.031]])),
-    poly(P([[0.018, 0.004], [0.054, 0.001], [0.018, 0.002]])),
-  ]);
-  return { root, mats: [mat, lines, e.material as MeshBasicMaterial], eyes: [e], ears: [earFront], jaw, body, height: 0.1, mouth: new Vector2(0.066 * k, -0.006 * k) };
+  const p = new PuppetParts(color,'jointed-wolf');
+  const neck = p.cut(poly([[-0.043,0.011],[-0.055,-0.012],[-0.05,-0.02],[-0.06,-0.029],[-0.054,-0.032],[-0.061,-0.048],[-0.024,-0.052],[-0.011,-0.036],[-0.02,-0.03],[-0.009,-0.021],[-0.019,-0.017],[-0.009,-0.007],[-0.021,0.004]]),lace(-0.047,-0.031,4,0.006,0.0011));
+  p.edge(p.body,neck,'wolf-teal-edge');
+  p.add(p.body,neck,'sawtooth-neck');
+  const arm=p.hinge(p.body,'wolf-shoulder',-0.034,-0.021,0.2,0.07);
+  p.add(arm,poly([[-0.004,0.004],[0.003,0.004],[0.012,-0.02],[0.008,-0.026],[0.002,-0.02]]),'wolf-upper-arm',p.plate);
+  const paw=p.hinge(arm,'wolf-elbow',0.008,-0.021,1.8,0.1);
+  p.add(paw,poly([[-0.003,0.002],[0.003,0.002],[0.008,-0.01],[0.022,-0.012],[0.023,-0.015],[0.004,-0.015]]),'wolf-paw');
+  p.joint(arm,0,0); p.joint(paw,0,0,0.002);
+  const head=p.cut(poly([[-0.044,0],[-0.036,0.018],[-0.025,0.027],[-0.013,0.023],[-0.009,0.05],[0,0.022],[0.013,0.014],[0.05,0.007],[0.058,0.003],[0.06,-0.002],[0.053,-0.006],[0.03,-0.006],[0.024,-0.01],[0.019,-0.006],[0.008,-0.01],[-0.004,-0.009],[-0.024,-0.023]]),lace(-0.031,0.007,3,0.006,0.0009));
+  p.add(p.body,poly([[-0.031,0.019],[-0.034,0.043],[-0.022,0.022]]),'back-ear',p.plate);
+  p.add(p.body,head,'carved-wolf-head');
+  p.joint(p.body,-0.025,-0.005,0.003);
+  p.eye(p.body,0.003,0.011,0.0023);
+  const jaw=new Group(); jaw.name='hinged-mandible'; jaw.position.set(-0.002,-0.008,0.0002); p.body.add(jaw);
+  p.add(jaw,poly([[-0.009,0.002],[0.02,-0.003],[0.052,-0.001],[0.047,-0.009],[0.024,-0.012],[0.005,-0.01],[-0.01,-0.004]]),'lower-jaw');
+  p.joint(jaw,0,0,0.0026);
+  p.control(jaw,0.029,-0.007,0.024);
+  p.control(paw,0.014,-0.01,-0.014);
+  return { ...rig(p,0.1,new Vector2(0.054,-0.005)), jaw };
 }
 
 export function buildDuck(color: number = INK): CreatureRig {
-  const mat = inkMaterial(color);
-  const root = new Group();
-  const body = new Group();
-  root.add(body);
-  const hull = part(blob([[-0.045, 0.005], [-0.035, -0.012], [0.02, -0.014], [0.034, 0.0], [0.02, 0.016], [-0.02, 0.018], [-0.05, 0.022]]), mat, 'hull');
-  const neck = part(ellipse(0.022, 0.026, 0.008, 0.016, -0.3), mat, 'neck');
-  const head = part(ellipse(0.028, 0.044, 0.012, 0.011), mat, 'head');
-  const beakTop = part(poly([[0.036, 0.048], [0.058, 0.043], [0.036, 0.04]]), mat, 'beak-top');
-  const beakLow = pivot(0.036, 0.04, part(poly([[0.036, 0.04], [0.054, 0.039], [0.036, 0.036]]), mat, 'beak-low'));
-  const wing = part(blob([[-0.032, 0.012], [-0.006, 0.016], [0.012, 0.008], [-0.005, -0.005], [-0.026, 0.001]]), inkMaterial(0x4a635e), 'wing');
-  wing.position.z = 0.0003;
-  const e = eye(0.031, 0.047, 0.0024);
-  body.add(hull, neck, head, beakTop, beakLow, wing, e);
-  const lines = engraving(body, [
-    poly([[-0.026, 0.009], [-0.008, 0.004], [0.001, 0.008], [-0.008, 0.002]]),
-    poly([[-0.025, 0.005], [-0.012, 0.0], [-0.004, 0.003], [-0.012, -0.002]]),
-    ellipse(0.025, 0.024, 0.001, 0.008, -0.3),
-  ]);
-  return {
-    root,
-    mats: [mat, lines, wing.material as MeshBasicMaterial, e.material as MeshBasicMaterial],
-    eyes: [e],
-    jaw: beakLow,
-    body,
-    height: 0.06,
-    mouth: new Vector2(0.056, 0.042),
-  };
+  const p = new PuppetParts(color,'jointed-duck');
+  const hull=p.cut(poly([[-0.05,0.024],[-0.04,0.018],[-0.033,0.023],[-0.023,0.017],[0.004,0.02],[0.023,0.008],[0.027,-0.001],[0.013,-0.015],[-0.022,-0.015],[-0.038,-0.006]]),lace(-0.025,-0.007,6,0.005,0.0009));
+  p.edge(p.body,hull,'duck-teal-edge');
+  p.add(p.body,hull,'scalloped-hull');
+  const neck=p.hinge(p.body,'neck-hinge',0.016,0.009,0.7,0.025);
+  p.add(neck,p.cut(blob([[-0.005,0],[0.006,-0.003],[0.013,0.022],[0.01,0.036],[0.003,0.034],[-0.005,0.023],[0.001,0.014]]),[ellipse(0.005,0.024,0.0014,0.008)]),'long-pierced-neck');
+  p.joint(neck,0,0);
+  p.add(neck,poly([[0.002,0.029],[0.004,0.045],[0.01,0.049],[0.019,0.045],[0.021,0.036],[0.015,0.028]]),'duck-head');
+  p.add(neck,poly([[0.016,0.037],[0.042,0.032],[0.041,0.028],[0.016,0.029]]),'upper-bill');
+  p.eye(neck,0.014,0.039,0.0017);
+  const jaw=new Group(); jaw.name='hinged-duck-bill'; jaw.position.set(0.018,0.028,0.0002); neck.add(jaw);
+  p.add(jaw,poly([[0,0],[0.023,0],[0.019,-0.005],[-0.002,-0.004]]),'lower-bill');
+  p.joint(jaw,0,0,0.0016);
+  const wing=p.hinge(p.body,'wing-hinge',0,0.009,Math.PI,0.08);
+  p.add(wing,p.cut(poly([[0.005,0.002],[-0.012,0.008],[-0.032,0.004],[-0.02,-0.009],[-0.015,-0.007],[-0.009,-0.013],[0.001,-0.008]]),[poly([[-0.022,0],[-0.005,0.001],[-0.015,-0.004]]),...lace(-0.015,0.003,3,0.005,0.00075)]),'pierced-wing',p.plate);
+  p.joint(wing,0,0,0.0028);
+  const paddle=p.hinge(p.body,'paddle-hip',-0.013,-0.011,0.8,0.14);
+  p.add(paddle,poly([[-0.002,0.001],[0.002,0.001],[0.006,-0.008],[0.017,-0.01],[0.013,-0.013],[0.002,-0.011]]),'webbed-paddle');
+  p.joint(paddle,0,0,0.0017);
+  p.control(wing,-0.017,-0.002,-0.016);
+  p.control(neck,0.007,0.017,0.019);
+  return { ...rig(p,0.06,new Vector2(0.056,0.042)), jaw };
 }
 
+/** Articulation and rods follow the real pivots. No geometry is allocated per frame. */
+export function animatePuppet(rig: CreatureRig, time: number, hopping: boolean, y: number, scale: number): void {
+  const stepTime = Math.floor(time * 12) / 12;
+  for (const joint of rig.joints ?? []) {
+    joint.pivot.rotation.z = joint.rest + Math.sin(stepTime * 4 + joint.phase) * joint.amplitude * (hopping ? 2.5 : 1);
+  }
+  rig.root.updateWorldMatrix(true, true);
+  const endY = (-SCREEN_H / 2 - y) / Math.max(scale, 0.01);
+  for (const rod of rig.rods ?? []) {
+    rod.anchor.getWorldPosition(rod.point);
+    rig.root.worldToLocal(rod.point);
+    const dy = Math.max(0, rod.point.y - endY);
+    rod.mesh.visible = dy > 0.001;
+    rod.mesh.position.set(rod.point.x + rod.lean / 2, rod.point.y - dy / 2, -0.0002);
+    rod.mesh.scale.y = Math.hypot(dy, rod.lean);
+    rod.mesh.rotation.z = Math.atan2(rod.lean, dy);
+  }
+}
 export const BUILDERS: Record<ShapeId, (c?: number) => CreatureRig> = {
   rabbit: buildRabbit,
   wolf: buildWolf,
@@ -161,6 +141,7 @@ export class HintGhost {
   readonly glow: Mesh;
   constructor(readonly shape: ShapeId) {
     this.rig = BUILDERS[shape](GLOW_COLD);
+    if (this.rig.controls) this.rig.controls.visible = false;
     this.glow = part(ellipse(0, this.rig.height * 0.45, this.rig.height * 0.75, this.rig.height * 0.6), inkMaterial(GLOW_WARM, 0), 'glow');
     this.glow.position.z = -0.0005;
     this.rig.root.add(this.glow);

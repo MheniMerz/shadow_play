@@ -102,8 +102,9 @@ XR hand joints ──► features ──► shape rules ──► stabilizer ─
   scale.
 - **Levels** are data (`src/game/levels.ts`): platforms, ponds, walls, props
   and a list of stage objectives (`form`, `reach`, `scare`, `paddle`).
-- **No assets.** Paper textures, creatures and scenery are drawn in code.
-  Sounds are synthesised with WebAudio.
+- **Shadow theatre artwork.** A generated parchment backdrop is bundled as a
+  WebP texture in `public/art/`. Jointed puppets, their control rods, and the
+  stage cutouts are procedural geometry. Sounds are synthesised with WebAudio.
 - **Progress** (stars, calibration, settings) is saved in `localStorage`.
 
 | Path | What |

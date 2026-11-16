@@ -1,11 +1,11 @@
 /** Shared pigments for the little cut-paper theatre. */
 export const PALETTE = {
-  ink: 0x202c31,
-  distant: 0xb5bfad,
-  woodland: 0x758b80,
-  hill: 0x415e59,
-  grass: 0x243f3c,
-  water: 0x527d85,
-  gold: 0xd9b36f,
+  ink: 0x11191b,
+  distant: 0x536663,
+  woodland: 0x253b3a,
+  hill: 0x172224,
+  grass: 0x11191b,
+  water: 0x334e4e,
+  gold: 0x8e866a,
   cream: 0xffedc8,
 } as const;

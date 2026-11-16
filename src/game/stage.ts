@@ -6,6 +6,7 @@
  */
 import {
   AmbientLight,
+  AssetManager,
   BoxGeometry,
   CircleGeometry,
   Color,
@@ -20,6 +21,7 @@ import {
   Quaternion,
   SphereGeometry,
   SpotLight,
+  SRGBColorSpace,
   Vector2,
   Vector3,
 } from '@iwsdk/core';
@@ -56,7 +58,13 @@ export class Stage {
     this.root.name = 'shadow-stage';
 
     // Paper screen
-    this.screenMat = new MeshStandardMaterial({ map: paperTexture(), roughness: 1, metalness: 0 });
+    const parchment = AssetManager.getTexture('theatreParchment') ?? paperTexture();
+    parchment.colorSpace = SRGBColorSpace;
+    parchment.anisotropy = 4;
+    this.screenMat = new MeshStandardMaterial({
+      map: parchment, color: 0xd3c4a4, roughness: 1, metalness: 0,
+      emissiveMap: parchment, emissive: 0xffc783, emissiveIntensity: 0.04,
+    });
     this.screen = new Mesh(new PlaneGeometry(SCREEN_W, SCREEN_H), this.screenMat);
     this.screen.name = 'paper-screen';
     this.screen.receiveShadow = true;
@@ -66,7 +74,7 @@ export class Stage {
     // The lamp uses the same warm wood as the theatre hardware.
     const wood = new MeshStandardMaterial({ color: 0x5b3b24, roughness: 0.8 });
 
-    const title = new TextCanvas(768, 96, { font: '500 56px Georgia, serif', color: '#ffe7b4', background: '#263e3c' });
+    const title = new TextCanvas(768, 96, { font: '500 56px Georgia, serif', color: '#d8c69d', background: '#172123' });
     title.set('S H A D O W  P L A Y');
     const titleMesh = new Mesh(new PlaneGeometry(0.25, 0.03125), new MeshBasicMaterial({ map: title.texture, transparent: true }));
     titleMesh.name = 'theatre-marquee';
@@ -88,7 +96,7 @@ export class Stage {
     this.root.add(this.captionMesh);
 
     // Lamp: a warm spot light beside the player's right shoulder.
-    this.lamp = new SpotLight(LAMP_COLOR, 6, 2.5, 0.62, 0.35, 1.2);
+    this.lamp = new SpotLight(LAMP_COLOR, 3.8, 2.5, 0.62, 0.35, 1.2);
     this.lamp.name = 'lamp-light';
     this.lamp.position.set(...LAMP_POS);
     this.lamp.castShadow = true;
@@ -102,7 +110,7 @@ export class Stage {
     this.root.add(target);
     this.lamp.target = target;
     this.root.add(this.lamp);
-    this.root.add(new AmbientLight(0xfff1e0, 0.35));
+    this.root.add(new AmbientLight(0xfff1e0, 0.25));
 
     // Small paper lamp visual at the light's position (kept low so it stays out of the way).
     this.bulbMat = new MeshBasicMaterial({ color: new Color(LAMP_COLOR) });
@@ -212,7 +220,7 @@ export class Stage {
   }
 
   setLampWarmth(w: number): void {
-    this.lamp.intensity = (4.5 + 2.5 * w) * this.k ** 1.2;
+    this.lamp.intensity = (3.2 + 1.6 * w) * this.k ** 1.2;
   }
 
   /** Dim the real hand shadow while a creature is alive (0..1). */
